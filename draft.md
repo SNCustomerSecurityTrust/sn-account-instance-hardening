@@ -14,6 +14,9 @@ These scripts are designed to be run in the **Scripts - Background** console of 
 
 **Why:** CIS and NIST 800-53 (AC-6) require that the highest-privilege roles be limited to the smallest number of named individuals with a documented business need. Unreviewed admin populations are consistently one of the top findings in ServiceNow security assessments.
 
+<details>
+<summary>Scripts - Background</summary>
+
 ```javascript
 var privilegedRoles = ['admin', 'security_admin', 'user_admin'];
 var privilegedUsers = {};
@@ -91,6 +94,47 @@ gs.info('Users with multiple high privilege roles: ' + multiRole.length);
 gs.info('Potential service accounts: ' + serviceAccounts.length);
 gs.info(JSON.stringify(results, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'privileged_user_population');
+
+var privilegedRoles = ['admin', 'security_admin', 'user_admin'];
+var dormantCount = 0;
+var ninetyDaysAgo = new GlideDateTime();
+ninetyDaysAgo.addDaysUTC(-90);
+
+for (var i = 0; i < privilegedRoles.length; i++) {
+    var gr = new GlideRecord('sys_user_has_role');
+    gr.addQuery('role.name', privilegedRoles[i]);
+    gr.addQuery('user.active', 'true');
+    gr.addQuery('state', 'active');
+    gr.query();
+    while (gr.next()) {
+        var lastLogin = gr.user.last_login_time.toString();
+        if (lastLogin) {
+            var loginDate = new GlideDateTime(lastLogin);
+            if (loginDate.compareTo(ninetyDaysAgo) < 0) {
+                dormantCount++;
+            }
+        } else {
+            dormantCount++;
+        }
+    }
+}
+
+// Non-compliant if any dormant privileged accounts exist
+grConfig.config_configure = (dormantCount === 0);
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -99,6 +143,9 @@ gs.info(JSON.stringify(results, null, 2));
 **What:** Identifies active users holding two or more high-privilege roles simultaneously (admin, security_admin, user_admin, delegated_admin, itil_admin, catalog_admin, knowledge_admin). Results are sorted by role count descending.
 
 **Why:** Role accumulation violates the principle of least privilege (NIST AC-6(5)) and significantly expands the blast radius of a compromised account. Separation of duties controls require that no single account concentrates multiple administrative capabilities without explicit justification.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var privilegedRoles = [
@@ -187,6 +234,43 @@ gs.info('Users with multiple high-privilege roles: ' + results.length);
 gs.info('Potential service accounts with multiple roles: ' + serviceAccounts.length);
 gs.info(JSON.stringify(results, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'multiple_high_privilege_roles');
+
+var privilegedRoles = ['admin', 'security_admin', 'user_admin', 'delegated_admin', 'itil_admin', 'catalog_admin', 'knowledge_admin'];
+var userRoleCounts = {};
+
+for (var i = 0; i < privilegedRoles.length; i++) {
+    var gr = new GlideRecord('sys_user_has_role');
+    gr.addQuery('role.name', privilegedRoles[i]);
+    gr.addQuery('user.active', 'true');
+    gr.addQuery('state', 'active');
+    gr.query();
+    while (gr.next()) {
+        var userId = gr.getValue('user');
+        userRoleCounts[userId] = (userRoleCounts[userId] || 0) + 1;
+    }
+}
+
+var multiRoleCount = 0;
+for (var uid in userRoleCounts) {
+    if (userRoleCounts[uid] > 1) multiRoleCount++;
+}
+
+// Non-compliant if any user holds 2+ high-privilege roles
+grConfig.config_configure = (multiRoleCount === 0);
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -195,6 +279,9 @@ gs.info(JSON.stringify(results, null, 2));
 **What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 90 days as highest reactivation risk.
 
 **Why:** If a deprovisioned account is reactivated (intentionally or accidentally), elevated access is immediately restored without requiring a new approval. This is a common gap in offboarding processes and violates NIST AC-2(3) requirements for disabling inactive accounts and revoking associated authorizations.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var roleList = [
@@ -282,6 +369,37 @@ gs.info(JSON.stringify(inherited, null, 2));
 gs.info('\nRecently deactivated users:');
 gs.info(JSON.stringify(recentlyDeactivated, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'deprovisioned_users_privileged_roles');
+
+var roleList = ['admin', 'security_admin', 'user_admin', 'delegated_admin', 'impersonator', 'itil_admin', 'catalog_admin', 'knowledge_admin'];
+
+var ga = new GlideAggregate('sys_user_has_role');
+ga.addQuery('role.name', 'IN', roleList.join(','));
+ga.addQuery('user.active', false);
+ga.addQuery('state', 'active');
+ga.addAggregate('COUNT');
+ga.query();
+
+var count = 0;
+if (ga.next()) {
+    count = parseInt(ga.getAggregate('COUNT'));
+}
+
+// Non-compliant if any inactive users retain active privileged role assignments
+grConfig.config_configure = (count === 0);
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -290,6 +408,9 @@ gs.info(JSON.stringify(recentlyDeactivated, null, 2));
 **What:** Identifies active ACLs that have no role restrictions, no conditions, and no scripts, meaning any authenticated user can pass them. Results are categorized by risk level: CRITICAL (wildcard `*` operation), HIGH (write/create/delete), MEDIUM (read), and LOW (other).
 
 **Why:** Misconfigured ACLs are the most common access control weakness in ServiceNow instances. NIST AC-3 and CIS controls require that access to resources be enforced through policy-based mechanisms. An ACL with no restrictions is effectively no access control at all.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 (function findOverlyPermissiveACLs() {
@@ -360,6 +481,48 @@ gs.info(JSON.stringify(recentlyDeactivated, null, 2));
 
 })();
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'overly_permissive_acls');
+
+var aclsWithRoles = {};
+var roleGR = new GlideRecord('sys_security_acl_role');
+roleGR.addNotNullQuery('sys_security_acl');
+roleGR.query();
+while (roleGR.next()) {
+    aclsWithRoles[roleGR.sys_security_acl.toString()] = true;
+}
+
+var riskyCount = 0;
+var gr = new GlideRecord('sys_security_acl');
+gr.addQuery('active', 'true');
+gr.addNullQuery('condition');
+gr.addNullQuery('script');
+gr.addQuery('sys_policy', '!=', 'read');
+gr.query();
+
+while (gr.next()) {
+    if (!aclsWithRoles[gr.sys_id.toString()]) {
+        var op = gr.operation.toString();
+        if (op === '*' || op === 'write' || op === 'create' || op === 'delete') {
+            riskyCount++;
+        }
+    }
+}
+
+// Non-compliant if any CRITICAL or HIGH risk ACLs found with no restrictions
+grConfig.config_configure = (riskyCount === 0);
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -368,6 +531,9 @@ gs.info(JSON.stringify(recentlyDeactivated, null, 2));
 **What:** Scans all active ACLs with non-null scripts for patterns indicating dangerous or overly permissive access control logic, including unconditional grants (`answer = true`), admin bypass patterns, dynamic behavior via external scripts or properties, and incomplete/disabled logic markers.
 
 **Why:** Script-based ACLs can silently undermine the entire access control model if they contain logic that unconditionally grants access or can be manipulated externally. OWASP and CIS guidance require that access control decisions be deterministic and not reliant on client-controllable or externally mutable inputs.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 (function findDangerousACLScripts() {
@@ -466,6 +632,41 @@ gs.info(JSON.stringify(recentlyDeactivated, null, 2));
 
 })();
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'dangerous_acl_scripts');
+
+var dangerousPatterns = ['answer = true', 'answer=true', 'return true'];
+var foundDangerous = false;
+
+var gr = new GlideRecord('sys_security_acl');
+gr.addQuery('active', 'true');
+gr.addNotNullQuery('script');
+gr.query();
+
+while (gr.next() && !foundDangerous) {
+    var scriptLower = gr.script.toString().toLowerCase().replace(/\s+/g, ' ');
+    for (var i = 0; i < dangerousPatterns.length; i++) {
+        if (scriptLower.indexOf(dangerousPatterns[i]) > -1) {
+            foundDangerous = true;
+            break;
+        }
+    }
+}
+
+// Non-compliant if any ACL scripts contain unconditional grant patterns
+grConfig.config_configure = !foundDangerous;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -474,6 +675,9 @@ gs.info(JSON.stringify(recentlyDeactivated, null, 2));
 **What:** Queries the syslog for impersonation events in the last 30 days, parsing each entry to extract who impersonated whom, the event type (start/end), and timestamps. Provides unique impersonator counts for behavioral baseline analysis.
 
 **Why:** Impersonation allows one user to act as another with full access to their data and capabilities. Without active monitoring, impersonation abuse is invisible. NIST AC-3(9) and SOC 2 CC6.1 require that use of privileged functions like impersonation be logged and periodically reviewed.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var gr = new GlideRecord('syslog');
@@ -535,6 +739,34 @@ gs.info('Session starts: ' + startEvents.length);
 gs.info('Unique impersonators: ' + Object.keys(uniqueImpersonators).length);
 gs.info(JSON.stringify(impersonationEvents, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'impersonation_activity_review');
+
+var ga = new GlideAggregate('syslog');
+ga.addQuery('source', 'Impersonate');
+ga.addQuery('sys_created_on', '>', gs.daysAgo(30));
+ga.addAggregate('COUNT');
+ga.query();
+
+var eventCount = 0;
+if (ga.next()) {
+    eventCount = parseInt(ga.getAggregate('COUNT'));
+}
+
+// Flag for review if impersonation events exist in the last 30 days
+grConfig.config_configure = (eventCount === 0);
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -543,6 +775,9 @@ gs.info(JSON.stringify(impersonationEvents, null, 2));
 **What:** Identifies all active users who can impersonate others by evaluating five vectors: direct `impersonator` role, direct `admin` role, direct `security_admin` role, group membership inheriting those roles, and role hierarchy where a parent role contains `impersonator` as a child.
 
 **Why:** Impersonation capability is often granted implicitly through admin or security_admin roles, making the true population of impersonators far larger than expected. NIST AC-6(1) requires organizations to explicitly authorize access to privileged functions, and impersonation must be inventoried across all grant vectors.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var impersonators = {};
@@ -662,6 +897,39 @@ gs.info('Human accounts: ' + humanAccounts.length);
 gs.info('Potential service accounts: ' + serviceAccounts.length);
 gs.info(JSON.stringify(results, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'impersonation_capability_population');
+
+var impersonators = {};
+var impersonationRoles = ['impersonator', 'admin', 'security_admin'];
+
+for (var i = 0; i < impersonationRoles.length; i++) {
+    var gr = new GlideRecord('sys_user_has_role');
+    gr.addQuery('role.name', impersonationRoles[i]);
+    gr.addQuery('user.active', 'true');
+    gr.addQuery('state', 'active');
+    gr.query();
+    while (gr.next()) {
+        impersonators[gr.getValue('user')] = true;
+    }
+}
+
+var count = Object.keys(impersonators).length;
+// Configurable threshold for acceptable impersonation population
+var threshold = 15;
+grConfig.config_configure = (count <= threshold);
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -670,6 +938,9 @@ gs.info(JSON.stringify(results, null, 2));
 **What:** Enumerates all active users with the `security_admin` role via direct and group-inherited assignments. Cross-references whether each user also holds the `admin` role, which compounds privilege. This query establishes the population used by queries 4b through 4e.
 
 **Why:** The `security_admin` role controls ACLs, encryption, and role assignments. An unchecked security_admin population is a top-tier risk because it can modify the controls that protect everything else. NIST AC-6(5) requires that privileged accounts be inventoried and reviewed on a regular cadence.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var secAdmins = {};
@@ -744,6 +1015,49 @@ gs.info('security_admin without admin: ' + withoutAdmin.length);
 gs.info('Potential service accounts: ' + serviceAccounts.length);
 gs.info(JSON.stringify(results, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'security_admin_population');
+
+var secAdmins = {};
+
+var direct = new GlideRecord('sys_user_has_role');
+direct.addQuery('role.name', 'security_admin');
+direct.addQuery('user.active', 'true');
+direct.addQuery('state', 'active');
+direct.query();
+while (direct.next()) {
+    secAdmins[direct.getValue('user')] = true;
+}
+
+var groupRole = new GlideRecord('sys_group_has_role');
+groupRole.addQuery('role.name', 'security_admin');
+groupRole.query();
+while (groupRole.next()) {
+    var member = new GlideRecord('sys_user_grmember');
+    member.addQuery('group', groupRole.getValue('group'));
+    member.addQuery('user.active', 'true');
+    member.query();
+    while (member.next()) {
+        secAdmins[member.getValue('user')] = true;
+    }
+}
+
+var count = Object.keys(secAdmins).length;
+// Configurable threshold for acceptable security_admin population
+var threshold = 10;
+grConfig.config_configure = (count <= threshold);
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -752,6 +1066,9 @@ gs.info(JSON.stringify(results, null, 2));
 **What:** Detects ACL and role table changes made by security_admin users in the last 30 days by querying the audit log for modifications to `sys_acl`, `sys_security_acl`, `sys_user_has_role`, and `sys_group_has_role`.
 
 **Why:** ACL modification is the primary vector through which security_admin privilege can be used to escalate access. SOC 2 CC6.1 and NIST AU-12 require that changes to access control configurations be logged, attributed, and reviewed. Unmonitored ACL changes can silently dismantle an instance's security posture.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var secAdminUsers = {};
@@ -821,6 +1138,50 @@ for (var i = 0; i < secAdminUsernames.length; i++) {
 gs.info('ACL modifications by security_admin users (last 30 days): ' + aclChanges.length);
 gs.info(JSON.stringify(aclChanges, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'security_admin_acl_modifications');
+
+var secAdminUsernames = [];
+var direct = new GlideRecord('sys_user_has_role');
+direct.addQuery('role.name', 'security_admin');
+direct.addQuery('user.active', 'true');
+direct.query();
+while (direct.next()) {
+    var uname = direct.user.user_name.toString();
+    if (secAdminUsernames.indexOf(uname) === -1) {
+        secAdminUsernames.push(uname);
+    }
+}
+
+var highRiskTables = ['sys_acl', 'sys_security_acl', 'sys_user_has_role', 'sys_group_has_role'];
+var changeCount = 0;
+
+for (var i = 0; i < secAdminUsernames.length; i++) {
+    var audit = new GlideAggregate('sys_audit');
+    audit.addQuery('user', secAdminUsernames[i]);
+    audit.addQuery('tablename', 'IN', highRiskTables.join(','));
+    audit.addQuery('sys_created_on', '>', gs.daysAgo(30));
+    audit.addAggregate('COUNT');
+    audit.query();
+    if (audit.next()) {
+        changeCount += parseInt(audit.getAggregate('COUNT'));
+    }
+}
+
+// Non-compliant if ACL/role table changes detected by security_admin users
+grConfig.config_configure = (changeCount === 0);
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -829,6 +1190,9 @@ gs.info(JSON.stringify(aclChanges, null, 2));
 **What:** Detects role assignment changes made by security_admin users in the last 30 days. Flags self-grants and grants of high-risk roles (admin, security_admin, impersonator) as the most direct indicators of privilege escalation.
 
 **Why:** Role grants are the most explicit form of privilege escalation. A security_admin granting themselves or others additional elevated roles bypasses intended approval workflows. NIST AC-6(5) and SOC 2 CC6.1 require that privileged role changes be authorized, logged, and reviewed for anomalous patterns.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var secAdminUsers = {};
@@ -933,6 +1297,56 @@ gs.info('High risk role grants (admin/security_admin/impersonator): ' + highRisk
 gs.info('Self grants: ' + selfGrants.length);
 gs.info(JSON.stringify(roleGrants, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'security_admin_role_grants');
+
+var secAdminUsernames = [];
+var direct = new GlideRecord('sys_user_has_role');
+direct.addQuery('role.name', 'security_admin');
+direct.addQuery('user.active', 'true');
+direct.query();
+while (direct.next()) {
+    var uname = direct.user.user_name.toString();
+    if (secAdminUsernames.indexOf(uname) === -1) {
+        secAdminUsernames.push(uname);
+    }
+}
+
+var selfGrantFound = false;
+var roleGrantTables = ['sys_user_has_role', 'sys_group_has_role'];
+
+for (var i = 0; i < secAdminUsernames.length && !selfGrantFound; i++) {
+    var audit = new GlideRecord('sys_audit');
+    audit.addQuery('user', secAdminUsernames[i]);
+    audit.addQuery('tablename', 'IN', roleGrantTables.join(','));
+    audit.addQuery('sys_created_on', '>', gs.daysAgo(30));
+    audit.query();
+    while (audit.next() && !selfGrantFound) {
+        var roleRecord = new GlideRecord(audit.tablename.toString());
+        if (roleRecord.get(audit.documentkey.toString())) {
+            if (audit.tablename.toString() === 'sys_user_has_role') {
+                if (roleRecord.user.user_name.toString() === secAdminUsernames[i]) {
+                    selfGrantFound = true;
+                }
+            }
+        }
+    }
+}
+
+// Non-compliant if any self-grants detected by security_admin users
+grConfig.config_configure = !selfGrantFound;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -941,6 +1355,9 @@ gs.info(JSON.stringify(roleGrants, null, 2));
 **What:** Detects modifications to server-side scripts (business rules, script includes, UI actions, web service operations, and processors) made by security_admin users in the last 30 days. Flags changes to active scripts as higher concern.
 
 **Why:** Server-side scripts execute with elevated privileges and represent an indirect but powerful path to platform compromise. A security_admin modifying a business rule can inject logic that runs on every transaction against a table. NIST SI-7 and CIS control 2.7 require integrity monitoring of executable code and configuration.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var secAdminUsers = {};
@@ -1042,6 +1459,54 @@ gs.info('Changes to active scripts: ' + activeScriptChanges.length);
 gs.info('Changes to inactive scripts: ' + inactiveScriptChanges.length);
 gs.info(JSON.stringify(scriptChanges, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'security_admin_script_changes');
+
+var secAdminUsernames = [];
+var direct = new GlideRecord('sys_user_has_role');
+direct.addQuery('role.name', 'security_admin');
+direct.addQuery('user.active', 'true');
+direct.query();
+while (direct.next()) {
+    var uname = direct.user.user_name.toString();
+    if (secAdminUsernames.indexOf(uname) === -1) {
+        secAdminUsernames.push(uname);
+    }
+}
+
+var scriptTables = ['sys_script', 'sys_script_include', 'sys_ui_action', 'sys_ws_operation', 'sys_processor'];
+var activeScriptChangeFound = false;
+
+for (var i = 0; i < secAdminUsernames.length && !activeScriptChangeFound; i++) {
+    var audit = new GlideRecord('sys_audit');
+    audit.addQuery('user', secAdminUsernames[i]);
+    audit.addQuery('tablename', 'IN', scriptTables.join(','));
+    audit.addQuery('sys_created_on', '>', gs.daysAgo(30));
+    audit.query();
+    while (audit.next() && !activeScriptChangeFound) {
+        var scriptRecord = new GlideRecord(audit.tablename.toString());
+        if (scriptRecord.get(audit.documentkey.toString())) {
+            if (scriptRecord.active.toString() === 'true' || scriptRecord.active.toString() === '1') {
+                activeScriptChangeFound = true;
+            }
+        }
+    }
+}
+
+// Non-compliant if security_admin users modified active server-side scripts
+grConfig.config_configure = !activeScriptChangeFound;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1050,6 +1515,9 @@ gs.info(JSON.stringify(scriptChanges, null, 2));
 **What:** Detects modifications to Platform Encryption resources (crypto modules, key maps, keys, key stores, certificates, and encryption contexts) made by security_admin users in the last 30 days. Flags deactivation events and changes to high-risk KMF tables separately.
 
 **Why:** Encryption key management is foundational to data protection. Unauthorized changes to encryption configuration can expose encrypted data at rest or render it unrecoverable. NIST SC-12 and SC-28 require that cryptographic key management activities be controlled and auditable.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var secAdminUsers = {};
@@ -1173,6 +1641,52 @@ gs.info('High risk table changes (sys_kmf_map, sys_kmf_key, sys_kmf_crypto_modul
 gs.info('Other encryption changes: ' + otherChanges.length);
 gs.info(JSON.stringify(encryptionChanges, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'security_admin_encryption_changes');
+
+var secAdminUsernames = [];
+var direct = new GlideRecord('sys_user_has_role');
+direct.addQuery('role.name', 'security_admin');
+direct.addQuery('user.active', 'true');
+direct.query();
+while (direct.next()) {
+    var uname = direct.user.user_name.toString();
+    if (secAdminUsernames.indexOf(uname) === -1) {
+        secAdminUsernames.push(uname);
+    }
+}
+
+var encryptionTables = ['sys_kmf_crypto_module', 'sys_kmf_map', 'sys_kmf_key', 'sys_kmf_key_store', 'sys_certificate', 'sys_encryption_context'];
+var deactivationFound = false;
+
+for (var i = 0; i < secAdminUsernames.length && !deactivationFound; i++) {
+    var audit = new GlideRecord('sys_audit');
+    audit.addQuery('user', secAdminUsernames[i]);
+    audit.addQuery('tablename', 'IN', encryptionTables.join(','));
+    audit.addQuery('fieldname', 'active');
+    audit.addQuery('oldvalue', '1');
+    audit.addQuery('newvalue', '0');
+    audit.addQuery('sys_created_on', '>', gs.daysAgo(30));
+    audit.query();
+    if (audit.next()) {
+        deactivationFound = true;
+    }
+}
+
+// Non-compliant if encryption deactivation events detected
+grConfig.config_configure = !deactivationFound;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1181,6 +1695,9 @@ gs.info(JSON.stringify(encryptionChanges, null, 2));
 **What:** Finds all active users flagged as web-service-access-only (integration/API accounts) that have been assigned roles containing "admin" in the name. These are non-interactive accounts with overly broad privileges.
 
 **Why:** Integration accounts should follow the principle of least privilege more strictly than human accounts because they typically operate unattended and are harder to monitor for misuse. CIS and NIST AC-6(10) recommend that non-interactive service accounts be restricted to the minimum permissions required for their function.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 // Find integration users with overly broad access
@@ -1221,6 +1738,41 @@ while (gr.next()) {
 
 gs.warn('Integration users with admin roles: ' + JSON.stringify(integrationUsers, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'integration_users_admin_roles');
+
+var found = false;
+var gr = new GlideRecord('sys_user');
+gr.addQuery('web_service_access_only', 'true');
+gr.addQuery('active', 'true');
+gr.query();
+
+while (gr.next() && !found) {
+    var roleGR = new GlideRecord('sys_user_has_role');
+    roleGR.addQuery('user', gr.sys_id);
+    roleGR.query();
+    while (roleGR.next()) {
+        if (roleGR.role.name.toString().indexOf('admin') > -1) {
+            found = true;
+            break;
+        }
+    }
+}
+
+// Non-compliant if any integration/API users have admin roles
+grConfig.config_configure = !found;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1229,6 +1781,9 @@ gs.warn('Integration users with admin roles: ' + JSON.stringify(integrationUsers
 **What:** Audits all active OAuth application registrations, capturing client IDs, redirect URLs, and access/refresh token lifespans. Identifies applications that may have excessively long token lifetimes.
 
 **Why:** OAuth tokens are bearer credentials - anyone who possesses a valid token can use it. Excessively long token lifespans increase the window of opportunity for token theft and replay. NIST IA-5(13) and OAuth 2.0 Security Best Current Practice (RFC 9700) recommend short-lived access tokens and bounded refresh token lifetimes.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 // Audit active OAuth applications and their token lifespans
@@ -1249,6 +1804,39 @@ while (gr.next()) {
 
 gs.info('Active OAuth applications: ' + JSON.stringify(oauthApps, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'oauth_token_lifespans');
+
+var excessiveLifespan = false;
+var maxAccessTokenLifespan = 3600;  // 1 hour in seconds
+var maxRefreshTokenLifespan = 86400; // 24 hours in seconds
+
+var gr = new GlideRecord('oauth_entity');
+gr.addQuery('active', 'true');
+gr.query();
+
+while (gr.next() && !excessiveLifespan) {
+    var accessLifespan = parseInt(gr.access_token_lifespan.toString()) || 0;
+    var refreshLifespan = parseInt(gr.refresh_token_lifespan.toString()) || 0;
+    if (accessLifespan > maxAccessTokenLifespan || refreshLifespan > maxRefreshTokenLifespan) {
+        excessiveLifespan = true;
+    }
+}
+
+// Non-compliant if any OAuth app has excessive token lifespans
+grConfig.config_configure = !excessiveLifespan;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1257,6 +1845,9 @@ gs.info('Active OAuth applications: ' + JSON.stringify(oauthApps, null, 2));
 **What:** Scans all active business rules for dangerous script patterns including `gs.setProperty`, direct manipulation of `sys_user` or `sys_user_has_role`, abort action overrides, role assignments, and session data injection. Reports matched patterns per rule for targeted review.
 
 **Why:** Business rules execute server-side with system-level privileges and fire automatically on database operations. A malicious or poorly written business rule can modify user records, grant roles, or alter system properties on every insert/update. NIST SI-7 requires integrity verification of operational code, and CIS recommends auditing scripts that run with elevated privileges.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 (function auditBusinessRules() {
@@ -1333,6 +1924,46 @@ gs.info('Active OAuth applications: ' + JSON.stringify(oauthApps, null, 2));
     }
 })();
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'business_rules_privilege_escalation');
+
+var dangerousPatterns = [
+    'gs.setProperty',
+    "GlideRecord('sys_user_has_role')",
+    'GlideRecord("sys_user_has_role")',
+    'current.setAbortAction(false)',
+    'gs.getUser().setRole'
+];
+var found = false;
+
+var gr = new GlideRecord('sys_script');
+gr.addQuery('active', 'true');
+gr.query();
+
+while (gr.next() && !found) {
+    var script = gr.script.toString();
+    for (var i = 0; i < dangerousPatterns.length; i++) {
+        if (script.indexOf(dangerousPatterns[i]) > -1) {
+            found = true;
+            break;
+        }
+    }
+}
+
+// Non-compliant if active business rules contain privilege escalation patterns
+grConfig.config_configure = !found;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1341,6 +1972,9 @@ gs.info('Active OAuth applications: ' + JSON.stringify(oauthApps, null, 2));
 **What:** Identifies active UI policies that contain actions setting fields to non-mandatory. These policies can override mandatory field requirements configured at the dictionary or form level, allowing users to submit records with missing data.
 
 **Why:** Mandatory field enforcement is a key data integrity control. UI policies that silently remove mandatory constraints can lead to incomplete records, broken workflows, and compliance gaps. CIS and NIST SI-10 require that input validation controls be consistently enforced and not overridden without authorization.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 var gr = new GlideRecord('sys_ui_policy');
@@ -1359,6 +1993,38 @@ while (gr.next()) {
     }
 }
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'ui_policy_mandatory_bypass');
+
+var found = false;
+var gr = new GlideRecord('sys_ui_policy');
+gr.addQuery('active', 'true');
+gr.query();
+
+while (gr.next() && !found) {
+    var actions = new GlideRecord('sys_ui_policy_action');
+    actions.addQuery('ui_policy', gr.sys_id);
+    actions.addQuery('mandatory', 'false');
+    actions.query();
+    if (actions.next()) {
+        found = true;
+    }
+}
+
+// Non-compliant if any active UI policy removes mandatory field enforcement
+grConfig.config_configure = !found;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1367,6 +2033,9 @@ while (gr.next()) {
 **What:** Checks whether domain separation is enabled and, if so, identifies active users without a domain assignment. These "orphaned" users may have unintended cross-domain visibility depending on the instance's domain separation configuration.
 
 **Why:** Domain separation is a critical multi-tenancy control in ServiceNow. Users without explicit domain assignment can potentially access data across all domains, violating data isolation requirements. NIST AC-4 and SOC 2 CC6.6 require that information flow between security domains be controlled.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 // Only runs if domain separation is enabled on the instance
@@ -1388,6 +2057,37 @@ if (gs.getProperty('glide.sys.domain_separation.enabled') == 'true') {
             JSON.stringify(orphanedUsers, null, 2));
 }
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'domain_separation_orphaned_users');
+
+var isCompliant = true;
+
+if (gs.getProperty('glide.sys.domain_separation.enabled') == 'true') {
+    var ga = new GlideAggregate('sys_user');
+    ga.addQuery('active', 'true');
+    ga.addNullQuery('sys_domain');
+    ga.addAggregate('COUNT');
+    ga.query();
+    if (ga.next()) {
+        var count = parseInt(ga.getAggregate('COUNT'));
+        isCompliant = (count === 0);
+    }
+}
+
+// Compliant if domain separation is disabled OR no orphaned users exist
+grConfig.config_configure = isCompliant;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1396,6 +2096,9 @@ if (gs.getProperty('glide.sys.domain_separation.enabled') == 'true') {
 **What:** Retrieves key security-related system properties governing guest access, SSO enforcement, multi-provider SSO configuration, and session timeout values. Provides a snapshot of the instance's authentication posture.
 
 **Why:** Weak authentication configuration is the most impactful category of misconfiguration in any enterprise platform. NIST IA-2, IA-8, and AC-12 require that systems enforce strong authentication, mandate SSO where available, and terminate sessions after defined inactivity periods.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 // Check authentication and session security properties
@@ -1414,6 +2117,40 @@ policies.forEach(function(policy) {
 
 gs.info('Security policy settings: ' + JSON.stringify(policySettings, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'authentication_session_properties');
+
+var isCompliant = true;
+
+// Guest access should be disabled
+if (gs.getProperty('glide.ui.security.allow_guest', 'false') === 'true') {
+    isCompliant = false;
+}
+
+// SSO should be required
+if (gs.getProperty('glide.authenticate.sso.required', 'false') !== 'true') {
+    isCompliant = false;
+}
+
+// Session timeout should be configured and reasonable (60 min or less)
+var sessionTimeout = gs.getProperty('glide.ui.session_timeout', '');
+if (!sessionTimeout || parseInt(sessionTimeout) > 60) {
+    isCompliant = false;
+}
+
+grConfig.config_configure = isCompliant;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1422,6 +2159,9 @@ gs.info('Security policy settings: ' + JSON.stringify(policySettings, null, 2));
 **What:** Identifies active users with `admin` or `security_admin` roles who do not have an active MFA device enrolled in ServiceNow's native MFA system (`sys_user_mfa_device`).
 
 **Why:** Privileged accounts without MFA are the highest-value targets for credential-based attacks. NIST IA-2(1), PCI DSS 8.4, and virtually every modern compliance framework mandate multi-factor authentication for administrative access. A single compromised admin password without MFA can lead to full instance takeover.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 // Find privileged users without MFA enrolled
@@ -1451,6 +2191,40 @@ while (gr.next()) {
 
 gs.warn('Admin users without MFA: ' + JSON.stringify(noMFAUsers, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'admin_users_without_mfa');
+
+var noMFAFound = false;
+var gr = new GlideRecord('sys_user');
+gr.addQuery('active', 'true');
+gr.query();
+
+while (gr.next() && !noMFAFound) {
+    if (gr.hasRole('admin') || gr.hasRole('security_admin')) {
+        var mfaGR = new GlideRecord('sys_user_mfa_device');
+        mfaGR.addQuery('user', gr.sys_id);
+        mfaGR.addQuery('active', 'true');
+        mfaGR.query();
+        if (!mfaGR.hasNext()) {
+            noMFAFound = true;
+        }
+    }
+}
+
+// Non-compliant if any admin/security_admin user lacks an active MFA device
+grConfig.config_configure = !noMFAFound;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1459,6 +2233,9 @@ gs.warn('Admin users without MFA: ' + JSON.stringify(noMFAUsers, null, 2));
 **What:** Identifies active scheduled script executions (`sysauto_script`) configured to run as a user with the `admin` role. These jobs execute on a schedule with the full privileges of the run-as user.
 
 **Why:** Scheduled jobs running as admin operate with unrestricted access and no interactive session monitoring. If the run-as account is compromised or the job script is modified, it becomes a persistent backdoor. NIST AC-6(1) and CIS recommend that automated processes run with the minimum privileges required.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 // Find scheduled jobs configured to run as admin users
@@ -1485,6 +2262,38 @@ while (gr.next()) {
 
 gs.info('Scheduled jobs running as admin: ' + JSON.stringify(adminJobs, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'scheduled_jobs_admin_runas');
+
+var found = false;
+var gr = new GlideRecord('sysauto_script');
+gr.addQuery('active', 'true');
+gr.query();
+
+while (gr.next() && !found) {
+    var runAs = gr.run_as.toString();
+    if (runAs) {
+        var runAsUser = new GlideRecord('sys_user');
+        if (runAsUser.get(runAs) && runAsUser.hasRole('admin')) {
+            found = true;
+        }
+    }
+}
+
+// Non-compliant if any active scheduled job runs as an admin user
+grConfig.config_configure = !found;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1493,6 +2302,9 @@ gs.info('Scheduled jobs running as admin: ' + JSON.stringify(adminJobs, null, 2)
 **What:** Retrieves all active IP-based access control rules, including type, IP address, subnet mask, and processing order. Provides a complete picture of network-level access restrictions applied to the instance.
 
 **Why:** IP access controls are a defense-in-depth measure that limits which networks can reach the instance. Misconfigured or overly permissive IP rules (e.g., allowing 0.0.0.0/0) negate this control entirely. NIST SC-7 and CIS recommend restricting administrative and API access to known, trusted network ranges.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 // Review IP access control rules
@@ -1514,6 +2326,33 @@ while (gr.next()) {
 
 gs.info('IP Access Control rules: ' + JSON.stringify(ipRules, null, 2));
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'ip_access_control_rules');
+
+var ga = new GlideAggregate('sys_security_acl_ip');
+ga.addQuery('active', 'true');
+ga.addAggregate('COUNT');
+ga.query();
+
+var ruleCount = 0;
+if (ga.next()) {
+    ruleCount = parseInt(ga.getAggregate('COUNT'));
+}
+
+// Non-compliant if no IP access control rules are configured
+grConfig.config_configure = (ruleCount > 0);
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
 
 ---
 
@@ -1522,6 +2361,9 @@ gs.info('IP Access Control rules: ' + JSON.stringify(ipRules, null, 2));
 **What:** Verifies that ServiceNow's Adaptive Authentication framework is operational by checking three conditions: the plugin is active, the master property (`glide.authenticate.auth.policy.enabled`) is enabled, and at least one active policy exists within an active context. Reports a PASS/FAIL verdict.
 
 **Why:** Adaptive authentication provides risk-based step-up authentication (e.g., prompting for MFA on suspicious logins). The plugin can be installed but non-functional if the master property is disabled or no policies are configured. NIST IA-2(13) recommends adaptive/risk-based authentication, and its absence leaves the instance reliant solely on static authentication controls.
+
+<details>
+<summary>Scripts - Background</summary>
 
 ```javascript
 (function verifyAdaptiveAuth() {
@@ -1586,3 +2428,35 @@ gs.info('IP Access Control rules: ' + JSON.stringify(ipRules, null, 2));
 
 })();
 ```
+</details>
+
+<details>
+<summary>Security Center Script Check</summary>
+
+```javascript
+var scComplianceUtil = new sn_vsc.VSCComplianceUtil();
+var grConfig = new GlideRecord('sn_vsc_security_check_configurations');
+grConfig.get('config_name', 'adaptive_authentication_enabled');
+
+var isCompliant = false;
+
+var pluginActive = GlidePluginManager.isActive('com.snc.adaptive_authentication');
+var propertyEnabled = gs.getProperty('glide.authenticate.auth.policy.enabled', 'false').toLowerCase() === 'true';
+
+if (pluginActive && propertyEnabled) {
+    var polGR = new GlideAggregate('sys_auth_policy');
+    polGR.addQuery('active', true);
+    polGR.addAggregate('COUNT');
+    polGR.query();
+    if (polGR.next()) {
+        isCompliant = parseInt(polGR.getAggregate('COUNT')) > 0;
+    }
+}
+
+// Non-compliant if adaptive auth plugin is inactive, property disabled, or no active policies
+grConfig.config_configure = isCompliant;
+grConfig.update();
+var settingArr = grConfig.config_setting.split(",");
+scComplianceUtil.updateSettingCompliance(settingArr);
+```
+</details>
