@@ -2460,3 +2460,32 @@ var settingArr = grConfig.config_setting.split(",");
 scComplianceUtil.updateSettingCompliance(settingArr);
 ```
 </details>
+
+---
+
+## Security Center Script Check Reference
+
+| Section | config_name | Pass Criteria |
+|---------|-------------|---------------|
+| 1a | `privileged_user_population` | No dormant (90-day) privileged accounts |
+| 1b | `multiple_high_privilege_roles` | No users with 2+ high-privilege roles |
+| 1c | `deprovisioned_users_privileged_roles` | No inactive users with active role assignments |
+| 2a | `overly_permissive_acls` | No CRITICAL/HIGH ACLs without restrictions |
+| 2b | `dangerous_acl_scripts` | No unconditional grant patterns in ACL scripts |
+| 3a | `impersonation_activity_review` | No impersonation events in last 30 days |
+| 3b | `impersonation_capability_population` | Impersonation-capable users <= 15 |
+| 4a | `security_admin_population` | security_admin users <= 10 |
+| 4b | `security_admin_acl_modifications` | No ACL/role changes by security_admin (30 days) |
+| 4c | `security_admin_role_grants` | No self-grants by security_admin users |
+| 4d | `security_admin_script_changes` | No active script modifications by security_admin |
+| 4e | `security_admin_encryption_changes` | No encryption deactivation events |
+| 5a | `integration_users_admin_roles` | No integration users with admin roles |
+| 5b | `oauth_token_lifespans` | No tokens exceeding 1hr access / 24hr refresh |
+| 6 | `business_rules_privilege_escalation` | No dangerous patterns in active business rules |
+| 7 | `ui_policy_mandatory_bypass` | No UI policies removing mandatory enforcement |
+| 8 | `domain_separation_orphaned_users` | Domain sep disabled OR no orphaned users |
+| 9a | `authentication_session_properties` | Guest disabled, SSO required, timeout <= 60min |
+| 9b | `admin_users_without_mfa` | All admin/security_admin have active MFA |
+| 10 | `scheduled_jobs_admin_runas` | No scheduled jobs running as admin |
+| 11a | `ip_access_control_rules` | At least one IP access rule configured |
+| 11b | `adaptive_authentication_enabled` | Plugin active, property enabled, policies exist |
