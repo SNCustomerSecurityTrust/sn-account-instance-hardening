@@ -1,0 +1,21 @@
+{
+  "active": "true",
+  "category": "security",
+  "description": "",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "aces 10 sched job admin",
+  "priority": "3",
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": "100",
+  "score_min": "0",
+  "score_scale": "1",
+  "short_description": "10 sched job admin",
+  "sys_id": "53f229062fdfb2148ff1641bcfa4e377",
+  "sys_name": "aces 10 sched job admin",
+  "sys_created_by": "admin",
+  "sys_created_on": "2026-02-27 18:47:30",
+  "sys_updated_by": "admin",
+  "sys_updated_on": "2026-02-28 15:32:01"
+}

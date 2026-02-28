@@ -1,0 +1,21 @@
+{
+  "active": "true",
+  "category": "security",
+  "description": "",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "aces 4e enc changes admin",
+  "priority": "4",
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": "100",
+  "score_min": "0",
+  "score_scale": "1",
+  "short_description": "4e enc changes",
+  "sys_id": "e66bb1562f97f2140fe9f74fafa4e37e",
+  "sys_name": "aces 4e enc changes admin",
+  "sys_created_by": "admin",
+  "sys_created_on": "2026-02-28 15:13:03",
+  "sys_updated_by": "admin",
+  "sys_updated_on": "2026-02-28 15:13:03"
+}

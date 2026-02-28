@@ -1,0 +1,21 @@
+{
+  "active": "true",
+  "category": "security",
+  "description": "",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "aces 2b acls dangerous",
+  "priority": "3",
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": "100",
+  "score_min": "0",
+  "score_scale": "1",
+  "short_description": "2b acls dangerous",
+  "sys_id": "a755e50a2fdfb2148ff1641bcfa4e39d",
+  "sys_name": "aces 2b acls dangerous",
+  "sys_created_by": "admin",
+  "sys_created_on": "2026-02-27 19:00:51",
+  "sys_updated_by": "admin",
+  "sys_updated_on": "2026-02-28 14:56:15"
+}
