@@ -1,4 +1,7 @@
 
+# what
+created these in Claude Code / Opus 4.6 in Feb 2026
+
 # read xml, update scan folder
 look in the xml file (ServiceNow Update Set format) in the /dist directory. for each scan_script_only_check record inside:
 
@@ -8,5 +11,4 @@ look in the xml file (ServiceNow Update Set format) in the /dist directory. for 
 
 
 # compare repo to XML
-
 look in the xml file (ServiceNow Update Set format) in the /dist directory. compare the information in each file to the matching payload/section inside of the update set. make a list of all differences, grouped by the app file name in the update set. 
