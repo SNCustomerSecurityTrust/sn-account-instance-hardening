@@ -1,7 +1,7 @@
 {
   "active": true,
   "category": "security",
-  "description": "What: Enumerates all active users with admin, security_admin, or user_admin roles via both direct assignment and group inheritance. Flags dormant accounts (by last login) and potential service accounts.\r\n\r\nWhy: CIS and NIST 800-53 (AC-6) require that the highest-privilege roles be limited to the smallest number of named individuals with a documented business need. Unreviewed admin populations are consistently one of the top findings in ServiceNow security assessments.",
+  "description": "What: Enumerates all active users with admin, security_admin, or user_admin roles via both direct assignment and group inheritance. Flags dormant accounts (by last login) and potential service accounts.\n\nWhy: CIS and NIST 800-53 (AC-6) require that the highest-privilege roles be limited to the smallest number of named individuals with a documented business need. Unreviewed admin populations are consistently one of the top findings in ServiceNow security assessments.",
   "documentation_url": "",
   "finding_type": "scan_finding",
   "name": "cstaces-1a admin users",
@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Users with Admin or Security Admin Roles",
   "sys_id": "9d55d4f52f17fed08ff1641bcfa4e343",
   "sys_class_name": "scan_script_only_check"
 }

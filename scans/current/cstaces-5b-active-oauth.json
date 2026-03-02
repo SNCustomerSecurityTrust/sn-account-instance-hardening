@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Review active OAuth IDs",
   "sys_id": "448229c22fdfb2148ff1641bcfa4e394",
   "sys_class_name": "scan_script_only_check"
 }

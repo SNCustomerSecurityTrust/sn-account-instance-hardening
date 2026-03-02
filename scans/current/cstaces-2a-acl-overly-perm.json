@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Find ACLs overly permissive",
   "sys_id": "f8e361862fdfb2148ff1641bcfa4e35b",
   "sys_class_name": "scan_script_only_check"
 }

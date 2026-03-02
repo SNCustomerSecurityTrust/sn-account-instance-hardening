@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Domain Separation users without domain",
   "sys_id": "8fafb51e2f97f2140fe9f74fafa4e378",
   "sys_class_name": "scan_script_only_check"
 }

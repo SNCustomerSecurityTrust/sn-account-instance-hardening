@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Recent script changes by security_admin",
   "sys_id": "9e4b65822f13f2148ff1641bcfa4e371",
   "sys_class_name": "scan_script_only_check"
 }

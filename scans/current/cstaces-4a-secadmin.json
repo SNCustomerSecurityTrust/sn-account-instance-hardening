@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Users with security_admin",
   "sys_id": "29e31dca2f9bb2148ff1641bcfa4e3e0",
   "sys_class_name": "scan_script_only_check"
 }

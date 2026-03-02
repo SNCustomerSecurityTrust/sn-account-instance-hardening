@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Multiple high-privilege roles",
   "sys_id": "b04849862f1bb2148ff1641bcfa4e33e",
   "sys_class_name": "scan_script_only_check"
 }

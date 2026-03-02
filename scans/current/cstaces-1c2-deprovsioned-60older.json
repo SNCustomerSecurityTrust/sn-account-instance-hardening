@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Inactive users with elevated roles (older)",
   "sys_id": "c3b20a922fd7f2140fe9f74fafa4e3ea",
   "sys_class_name": "scan_script_only_check"
 }

@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Review self-assigned admin roles",
   "sys_id": "160e590e2f9fb2148ff1641bcfa4e3a7",
   "sys_class_name": "scan_script_only_check"
 }

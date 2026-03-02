@@ -10,15 +10,15 @@ This repository contains a ServiceNow Update Set with an Instance Scan suite and
 
 ### Download the Update Set
 
-1. Download the update set XML from the [`dist/`](dist/) directory: **[scans v1.xml](dist/scans%20v1.xml)**
+1. Download the update set XML from the [`dist/`](dist/) directory: 
 2. You can click **Code > Download ZIP** on this repo, or download the raw file directly.
 
 ### Import and Commit the Update Set
 
 1. Navigate to **System Update Sets > Retrieved Update Sets**
 2. Click **Import Update Set from XML**
-3. Select the downloaded `scans v1.xml` file and upload it
-4. Open the retrieved update set named **scans v1**
+3. Select the downloaded Update Set .xml file and upload it
+4. Open the retrieved update set
 5. Click **Preview Update Set** and review any conflicts
 6. Click **Commit Update Set** to apply the scan suite and checks to your instance
 
@@ -132,9 +132,7 @@ Each check below is a `scan_script_only_check` record deployed via the update se
 
 Source files are available in [`scans/current/`](scans/current/) (`.js` for scripts, `.json` for metadata).
 
-### cstaces-1a admin users
-
-**Priority:** 2
+### Users with Admin or Security Admin Roles
 
 **What:** Enumerates all active users with admin, security_admin, or user_admin roles via both direct assignment and group inheritance. Flags dormant accounts (by last login) and potential service accounts.
 
@@ -245,9 +243,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-1b multiple high
-
-**Priority:** 3
+### Multiple high-privilege roles
 
 **What:** Identifies active users holding two or more high-privilege roles simultaneously (admin, security_admin, user_admin, delegated_admin, itil_admin, catalog_admin, knowledge_admin). Results are sorted by role count descending.
 
@@ -381,128 +377,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-1c deprovioned 60newer
-
-**Priority:** 3
-
-**What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 90 days as highest reactivation risk.
-
-**Why:** If a deprovisioned account is reactivated (intentionally or accidentally), elevated access is immediately restored without requiring a new approval. This is a common gap in offboarding processes and violates NIST AC-2(3) requirements for disabling inactive accounts and revoking associated authorizations.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    var roleList = [
-        'admin',
-        'security_admin',
-        'user_admin',
-        'delegated_admin',
-        'impersonator',
-        'itil_admin',
-        'catalog_admin',
-        'knowledge_admin'
-    ];
-
-    var inactiveRoles = new GlideRecord('sys_user_has_role');
-    inactiveRoles.addQuery('role.name', 'IN', roleList.join(','));
-    inactiveRoles.addQuery('user.active', false);
-    inactiveRoles.addQuery('state', 'active'); // Role assignment is still active even though the user is not
-    inactiveRoles.query();
-
-    var direct = [];
-    var inherited = [];
-
-    while (inactiveRoles.next()) {
-
-		//var userRec = inactiveRoles.user.getRefRecord();
-		//engine.finding.setCurrentSource(userRec);
-		//engine.finding.increment();
-
-        var uname = inactiveRoles.user.user_name.toString();
-        var record = {
-            sys_id: inactiveRoles.getUniqueValue(),
-            user_sys_id: inactiveRoles.getValue('user'),
-            user_name: uname,
-            user_display_name: inactiveRoles.user.getDisplayValue(),
-            email: inactiveRoles.user.email.toString(),
-            role: inactiveRoles.role.name.toString(),
-            inherited: inactiveRoles.inherited.toString(),
-            sys_created_on: inactiveRoles.sys_created_on.toString(),
-            last_login: inactiveRoles.user.last_login_time.toString(),
-            locked_out: inactiveRoles.user.locked_out.toString(),
-            is_service_account: (uname.indexOf('svc') > -1 ||
-                uname.indexOf('service') > -1 ||
-                uname.indexOf('integration') > -1 ||
-                uname.indexOf('api') > -1) ? true : false
-        };
-
-        if (inactiveRoles.inherited.toString() === 'false') {
-            direct.push(record);
-        } else {
-            inherited.push(record);
-        }
-    }
-
-    // Flag recently deactivated users (last 60 days) - highest reactivation risk
-    // Note: uses sys_updated_on as proxy since ServiceNow has no dedicated deactivation timestamp
-    var recentlyDeactivated = [];
-    var allRecords = direct.concat(inherited);
-
-    for (var i = 0; i < allRecords.length; i++) {
-        var deactivatedUser = new GlideRecord('sys_user');
-        deactivatedUser.get(allRecords[i].user_sys_id);
-        var updatedOn = new GlideDateTime(deactivatedUser.sys_updated_on.toString());
-        var checkDaysAgo = new GlideDateTime();
-        checkDaysAgo.addDaysUTC(-60);
-        if (updatedOn.compareTo(checkDaysAgo) > 0) {
-			
-			engine.finding.setCurrentSource(deactivatedUser);
-			engine.finding.setValue('finding_details',i);
-			engine.finding.increment();
-
-            recentlyDeactivated.push({
-                user_name: allRecords[i].user_name,
-                user_display_name: allRecords[i].user_display_name,
-                email: allRecords[i].email,
-                role: allRecords[i].role,
-                inherited: allRecords[i].inherited,
-                is_service_account: allRecords[i].is_service_account,
-                deactivated_around: deactivatedUser.sys_updated_on.toString()
-            });
-        
-		}
-    }
-
-    var serviceAccounts = allRecords.filter(function(u) {
-        return u.is_service_account;
-    });
-
-    // gs.info('=== DEPROVISIONED USERS WITH PRIVILEGED ROLES ===');
-    // gs.info('Direct assignments (critical - survives reactivation): ' + direct.length);
-    // gs.info('Inherited assignments (high - survives reactivation): ' + inherited.length);
-    // gs.info('Total records: ' + (direct.length + inherited.length));
-    // gs.info('Recently deactivated (<90 days, highest reactivation risk): ' + recentlyDeactivated.length);
-    // gs.info('Potential service accounts: ' + serviceAccounts.length);
-    // gs.info('\nDirect assignments:');
-    // gs.info(JSON.stringify(direct, null, 2));
-    // gs.info('\nInherited assignments:');
-    // gs.info(JSON.stringify(inherited, null, 2));
-    // gs.info('\nRecently deactivated users:');
-    // gs.info(JSON.stringify(recentlyDeactivated, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### cstaces-1c2 deprovsioned 60older
-
-**Priority:** 4
+### Inactive users with elevated roles (older)
 
 **What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 90 days as highest reactivation risk.
 
@@ -619,9 +494,124 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-2a ACL overly perm
+### Inactive users with elevated roles (recent)
 
-**Priority:** 4
+**What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 90 days as highest reactivation risk.
+
+**Why:** If a deprovisioned account is reactivated (intentionally or accidentally), elevated access is immediately restored without requiring a new approval. This is a common gap in offboarding processes and violates NIST AC-2(3) requirements for disabling inactive accounts and revoking associated authorizations.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+
+    var roleList = [
+        'admin',
+        'security_admin',
+        'user_admin',
+        'delegated_admin',
+        'impersonator',
+        'itil_admin',
+        'catalog_admin',
+        'knowledge_admin'
+    ];
+
+    var inactiveRoles = new GlideRecord('sys_user_has_role');
+    inactiveRoles.addQuery('role.name', 'IN', roleList.join(','));
+    inactiveRoles.addQuery('user.active', false);
+    inactiveRoles.addQuery('state', 'active'); // Role assignment is still active even though the user is not
+    inactiveRoles.query();
+
+    var direct = [];
+    var inherited = [];
+
+    while (inactiveRoles.next()) {
+
+		//var userRec = inactiveRoles.user.getRefRecord();
+		//engine.finding.setCurrentSource(userRec);
+		//engine.finding.increment();
+
+        var uname = inactiveRoles.user.user_name.toString();
+        var record = {
+            sys_id: inactiveRoles.getUniqueValue(),
+            user_sys_id: inactiveRoles.getValue('user'),
+            user_name: uname,
+            user_display_name: inactiveRoles.user.getDisplayValue(),
+            email: inactiveRoles.user.email.toString(),
+            role: inactiveRoles.role.name.toString(),
+            inherited: inactiveRoles.inherited.toString(),
+            sys_created_on: inactiveRoles.sys_created_on.toString(),
+            last_login: inactiveRoles.user.last_login_time.toString(),
+            locked_out: inactiveRoles.user.locked_out.toString(),
+            is_service_account: (uname.indexOf('svc') > -1 ||
+                uname.indexOf('service') > -1 ||
+                uname.indexOf('integration') > -1 ||
+                uname.indexOf('api') > -1) ? true : false
+        };
+
+        if (inactiveRoles.inherited.toString() === 'false') {
+            direct.push(record);
+        } else {
+            inherited.push(record);
+        }
+    }
+
+    // Flag recently deactivated users (last 60 days) - highest reactivation risk
+    // Note: uses sys_updated_on as proxy since ServiceNow has no dedicated deactivation timestamp
+    var recentlyDeactivated = [];
+    var allRecords = direct.concat(inherited);
+
+    for (var i = 0; i < allRecords.length; i++) {
+        var deactivatedUser = new GlideRecord('sys_user');
+        deactivatedUser.get(allRecords[i].user_sys_id);
+        var updatedOn = new GlideDateTime(deactivatedUser.sys_updated_on.toString());
+        var checkDaysAgo = new GlideDateTime();
+        checkDaysAgo.addDaysUTC(-60);
+        if (updatedOn.compareTo(checkDaysAgo) > 0) {
+			
+			engine.finding.setCurrentSource(deactivatedUser);
+			engine.finding.setValue('finding_details',i);
+			engine.finding.increment();
+
+            recentlyDeactivated.push({
+                user_name: allRecords[i].user_name,
+                user_display_name: allRecords[i].user_display_name,
+                email: allRecords[i].email,
+                role: allRecords[i].role,
+                inherited: allRecords[i].inherited,
+                is_service_account: allRecords[i].is_service_account,
+                deactivated_around: deactivatedUser.sys_updated_on.toString()
+            });
+        
+		}
+    }
+
+    var serviceAccounts = allRecords.filter(function(u) {
+        return u.is_service_account;
+    });
+
+    // gs.info('=== DEPROVISIONED USERS WITH PRIVILEGED ROLES ===');
+    // gs.info('Direct assignments (critical - survives reactivation): ' + direct.length);
+    // gs.info('Inherited assignments (high - survives reactivation): ' + inherited.length);
+    // gs.info('Total records: ' + (direct.length + inherited.length));
+    // gs.info('Recently deactivated (<90 days, highest reactivation risk): ' + recentlyDeactivated.length);
+    // gs.info('Potential service accounts: ' + serviceAccounts.length);
+    // gs.info('\nDirect assignments:');
+    // gs.info(JSON.stringify(direct, null, 2));
+    // gs.info('\nInherited assignments:');
+    // gs.info(JSON.stringify(inherited, null, 2));
+    // gs.info('\nRecently deactivated users:');
+    // gs.info(JSON.stringify(recentlyDeactivated, null, 2));
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Find ACLs overly permissive
 
 **What:** Identifies active ACLs that have no role restrictions, no conditions, and no scripts, meaning any authenticated user can pass them. Results are categorized by risk level: CRITICAL (wildcard * operation), HIGH (write/create/delete), MEDIUM (read), and LOW (other).
 
@@ -724,9 +714,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-2b acls dangerous
-
-**Priority:** 3
+### Find ACLs with risky patterns
 
 **What:** Scans all active ACLs with non-null scripts for patterns indicating dangerous or overly permissive access control logic, including unconditional grants (answer = true), admin bypass patterns, dynamic behavior via external scripts or properties, and incomplete/disabled logic markers.
 
@@ -847,9 +835,116 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-3b has impersonator
+### Find roles with nested impersonator
 
-**Priority:** 3
+**What:** Identifies all active users who can impersonate others by evaluating five vectors: direct impersonator role, direct admin role, direct security_admin role, group membership inheriting those roles, and role hierarchy where a parent role contains impersonator as a child.
+
+**Why:** Impersonation capability is often granted implicitly through admin or security_admin roles, making the true population of impersonators far larger than expected. NIST AC-6(1) requires organizations to explicitly authorize access to privileged functions, and impersonation must be inventoried across all grant vectors.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+
+    // var impersonators = {};
+
+    // function addUser(userSysId, source) {
+    //     if (!userSysId) return;
+    //     var u = new GlideRecord('sys_user');
+    //     if (u.get(userSysId)) {
+    //         if (u.getValue('active') != '1') return;
+    //         var uname = u.user_name.toString();
+    //         if (!impersonators[uname]) {
+    //             impersonators[uname] = {
+    //                 user: u.name.toString(),
+    //                 user_name: uname,
+    //                 email: u.email.toString(),
+    //                 last_login: u.last_login_time.toString(),
+    //                 is_service_account: (uname.indexOf('svc') > -1 ||
+    //                     uname.indexOf('service') > -1 ||
+    //                     uname.indexOf('integration') > -1 ||
+    //                     uname.indexOf('api') > -1) ? true : false,
+    //                 sources: []
+    //             };
+    //         }
+    //         if (impersonators[uname].sources.indexOf(source) === -1) {
+    //             impersonators[uname].sources.push(source);
+    //         }
+    //     }
+    // }
+
+
+    // 5. Parent roles containing impersonator as a child role (role hierarchy)
+    var childRole = new GlideRecord('sys_user_role_contains');
+    childRole.addQuery('contains.name', 'impersonator');
+    childRole.query();
+    while (childRole.next()) {
+        var parentRoleName = childRole.parent.name.toString();
+        var parentRoleId = childRole.getValue('parent');
+
+        // var parentUsers = new GlideRecord('sys_user_has_role');
+        // parentUsers.addQuery('role', parentRoleId);
+        // parentUsers.addQuery('user.active', 'true');
+        // parentUsers.query();
+        // while (parentUsers.next()) {
+
+        //     var userRec5 = parentUsers.user.getRefRecord();
+		engine.finding.setCurrentSource(childRole);
+		engine.finding.setValue('finding_details', 'Found with NESTED IMPERSONATOR role assignment');
+		engine.finding.increment();
+
+        //     //addUser(parentUsers.getValue('user'), 'inherited_role:' + parentRoleName);
+
+        // }
+
+        var parentGroups = new GlideRecord('sys_group_has_role');
+        parentGroups.addQuery('role', parentRoleId);
+        parentGroups.query();
+        while (parentGroups.next()) {
+            var gName = parentGroups.group.name.toString();
+            var gMembers = new GlideRecord('sys_user_grmember');
+            gMembers.addQuery('group', parentGroups.getValue('group'));
+            gMembers.addQuery('user.active', 'true');
+            gMembers.query();
+            while (gMembers.next()) {
+
+                var userRec6 = gMembers.user.getRefRecord();
+                engine.finding.setCurrentSource(userRec6);
+				engine.finding.setValue('finding_details', 'Found with GROUP ASSIGNED NESTED role assignment');
+                engine.finding.increment();
+
+                //addUser(gMembers.getValue('user'), 'group_inherited_role:' + gName + ':' + parentRoleName);
+
+            }
+        }
+    }
+
+    // var results = [];
+    // for (var uname in impersonators) {
+    //     results.push(impersonators[uname]);
+    // }
+
+    // var serviceAccounts = results.filter(function(u) {
+    //     return u.is_service_account;
+    // });
+    // var humanAccounts = results.filter(function(u) {
+    //     return !u.is_service_account;
+    // });
+
+    // gs.info('Total users with impersonation capability: ' + results.length);
+    // gs.info('Human accounts: ' + humanAccounts.length);
+    // gs.info('Potential service accounts: ' + serviceAccounts.length);
+    // gs.info(JSON.stringify(results, null, 2));
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Users with impersonation ability
 
 **What:** Identifies all active users who can impersonate others by evaluating five vectors: direct impersonator role, direct admin role, direct security_admin role, group membership inheriting those roles, and role hierarchy where a parent role contains impersonator as a child.
 
@@ -1032,120 +1127,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-3b2 nested impersonator
-
-**Priority:** 3
-
-**What:** Identifies all active users who can impersonate others by evaluating five vectors: direct impersonator role, direct admin role, direct security_admin role, group membership inheriting those roles, and role hierarchy where a parent role contains impersonator as a child.
-
-**Why:** Impersonation capability is often granted implicitly through admin or security_admin roles, making the true population of impersonators far larger than expected. NIST AC-6(1) requires organizations to explicitly authorize access to privileged functions, and impersonation must be inventoried across all grant vectors.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    // var impersonators = {};
-
-    // function addUser(userSysId, source) {
-    //     if (!userSysId) return;
-    //     var u = new GlideRecord('sys_user');
-    //     if (u.get(userSysId)) {
-    //         if (u.getValue('active') != '1') return;
-    //         var uname = u.user_name.toString();
-    //         if (!impersonators[uname]) {
-    //             impersonators[uname] = {
-    //                 user: u.name.toString(),
-    //                 user_name: uname,
-    //                 email: u.email.toString(),
-    //                 last_login: u.last_login_time.toString(),
-    //                 is_service_account: (uname.indexOf('svc') > -1 ||
-    //                     uname.indexOf('service') > -1 ||
-    //                     uname.indexOf('integration') > -1 ||
-    //                     uname.indexOf('api') > -1) ? true : false,
-    //                 sources: []
-    //             };
-    //         }
-    //         if (impersonators[uname].sources.indexOf(source) === -1) {
-    //             impersonators[uname].sources.push(source);
-    //         }
-    //     }
-    // }
-
-
-    // 5. Parent roles containing impersonator as a child role (role hierarchy)
-    var childRole = new GlideRecord('sys_user_role_contains');
-    childRole.addQuery('contains.name', 'impersonator');
-    childRole.query();
-    while (childRole.next()) {
-        var parentRoleName = childRole.parent.name.toString();
-        var parentRoleId = childRole.getValue('parent');
-
-        // var parentUsers = new GlideRecord('sys_user_has_role');
-        // parentUsers.addQuery('role', parentRoleId);
-        // parentUsers.addQuery('user.active', 'true');
-        // parentUsers.query();
-        // while (parentUsers.next()) {
-
-        //     var userRec5 = parentUsers.user.getRefRecord();
-		engine.finding.setCurrentSource(childRole);
-		engine.finding.setValue('finding_details', 'Found with NESTED IMPERSONATOR role assignment');
-		engine.finding.increment();
-
-        //     //addUser(parentUsers.getValue('user'), 'inherited_role:' + parentRoleName);
-
-        // }
-
-        var parentGroups = new GlideRecord('sys_group_has_role');
-        parentGroups.addQuery('role', parentRoleId);
-        parentGroups.query();
-        while (parentGroups.next()) {
-            var gName = parentGroups.group.name.toString();
-            var gMembers = new GlideRecord('sys_user_grmember');
-            gMembers.addQuery('group', parentGroups.getValue('group'));
-            gMembers.addQuery('user.active', 'true');
-            gMembers.query();
-            while (gMembers.next()) {
-
-                var userRec6 = gMembers.user.getRefRecord();
-                engine.finding.setCurrentSource(userRec6);
-				engine.finding.setValue('finding_details', 'Found with GROUP ASSIGNED NESTED role assignment');
-                engine.finding.increment();
-
-                //addUser(gMembers.getValue('user'), 'group_inherited_role:' + gName + ':' + parentRoleName);
-
-            }
-        }
-    }
-
-    // var results = [];
-    // for (var uname in impersonators) {
-    //     results.push(impersonators[uname]);
-    // }
-
-    // var serviceAccounts = results.filter(function(u) {
-    //     return u.is_service_account;
-    // });
-    // var humanAccounts = results.filter(function(u) {
-    //     return !u.is_service_account;
-    // });
-
-    // gs.info('Total users with impersonation capability: ' + results.length);
-    // gs.info('Human accounts: ' + humanAccounts.length);
-    // gs.info('Potential service accounts: ' + serviceAccounts.length);
-    // gs.info(JSON.stringify(results, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### cstaces-4a secadmin
-
-**Priority:** 3
+### Users with security_admin
 
 **What:** Enumerates all active users with the security_admin role via direct and group-inherited assignments. Cross-references whether each user also holds the admin role, which compounds privilege. This query establishes the population used by queries 4b through 4e.
 
@@ -1254,9 +1236,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-4b acl modif
-
-**Priority:** 3
+### Recent changes to ACLs and roles
 
 **What:** Detects ACL and role table changes made by security_admin users in the last 30 days by querying the audit log for modifications to sys_acl, sys_security_acl, sys_user_has_role, and sys_group_has_role.
 
@@ -1350,9 +1330,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-4c self role grant
-
-**Priority:** 4
+### Review self-assigned admin roles
 
 **What:** Detects role assignment changes made by security_admin users in the last 30 days. Flags self-grants and grants of high-risk roles (admin, security_admin, impersonator) as the most direct indicators of privilege escalation.
 
@@ -1474,9 +1452,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-4d1 secadmin script changes
-
-**Priority:** 4
+### Recent script changes by security_admin
 
 **What:** Detects modifications to server-side scripts (business rules, script includes, UI actions, web service operations, and processors) made by security_admin users in the last 30 days. Flags changes to active scripts as higher concern.
 
@@ -1602,9 +1578,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-4d2 admin script changes
-
-**Priority:** 4
+### Recent script changes by admin
 
 **What:** Detects modifications to server-side scripts (business rules, script includes, UI actions, web service operations, and processors) made by security_admin users in the last 30 days. Flags changes to active scripts as higher concern.
 
@@ -1730,9 +1704,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-4e encryption configs
-
-**Priority:** 4
+### Find changes to Encryption config tables
 
 **What:** Detects modifications to Platform Encryption resources (crypto modules, key maps, keys, key stores, certificates, and encryption contexts) made by security_admin users in the last 30 days. Flags deactivation events and changes to high-risk KMF tables separately.
 
@@ -1882,9 +1854,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-5a integration admins
-
-**Priority:** 2
+### Integration users with admin role
 
 **What:** Finds all active users flagged as web-service-access-only (integration/API accounts) that have been assigned roles containing "admin" in the name. These are non-interactive accounts with overly broad privileges.
 
@@ -1945,9 +1915,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-5b active oauth
-
-**Priority:** 3
+### Review active OAuth IDs
 
 **What:** Audits all active OAuth application registrations, capturing client IDs, redirect URLs, and access/refresh token lifespans. Identifies applications that may have excessively long token lifetimes.
 
@@ -1988,9 +1956,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-6 BR priv esc
-
-**Priority:** 4
+### Find BRs with risky patterns
 
 **What:** Scans all active business rules for dangerous script patterns including gs.setProperty, direct manipulation of sys_user or sys_user_has_role, abort action overrides, role assignments, and session data injection. Reports matched patterns per rule for targeted review.
 
@@ -2087,9 +2053,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-8 domsep users
-
-**Priority:** 4
+### Domain Separation users without domain
 
 **What:** Checks whether domain separation is enabled and, if so, identifies active users without a domain assignment. These "orphaned" users may have unintended cross-domain visibility depending on the instance's domain separation configuration.
 
@@ -2131,9 +2095,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-9a auth session prop
-
-**Priority:** 4
+### Review user session configs
 
 **What:** Retrieves key security-related system properties governing guest access, SSO enforcement, multi-provider SSO configuration, and session timeout values. Provides a snapshot of the instance's authentication posture.
 
@@ -2192,9 +2154,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### cstaces-10 sched job admin
-
-**Priority:** 4
+### Scheduled jobs running as admin
 
 **What:** Identifies active scheduled script executions (sysauto_script) configured to run as a user with the admin role. These jobs execute on a schedule with the full privileges of the run-as user.
 

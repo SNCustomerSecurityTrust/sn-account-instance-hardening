@@ -11,6 +11,7 @@
   "score_max": 100,
   "score_min": 0,
   "score_scale": 1,
+  "short_description": "Find changes to Encryption config tables",
   "sys_id": "e66bb1562f97f2140fe9f74fafa4e37e",
   "sys_class_name": "scan_script_only_check"
 }
