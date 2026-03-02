@@ -1,0 +1,16 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Detects role assignment changes made by security_admin users in the last 30 days. Flags self-grants and grants of high-risk roles (admin, security_admin, impersonator) as the most direct indicators of privilege escalation.\n\nWhy: Role grants are the most explicit form of privilege escalation. A security_admin granting themselves or others additional elevated roles bypasses intended approval workflows. NIST AC-6(5) and SOC 2 CC6.1 require that privileged role changes be authorized, logged, and reviewed for anomalous patterns.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-4c self role grant",
+  "priority": 4,
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "sys_id": "160e590e2f9fb2148ff1641bcfa4e3a7",
+  "sys_class_name": "scan_script_only_check"
+}

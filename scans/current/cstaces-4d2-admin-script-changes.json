@@ -1,0 +1,16 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Detects modifications to server-side scripts (business rules, script includes, UI actions, web service operations, and processors) made by security_admin users in the last 30 days. Flags changes to active scripts as higher concern.\n\nWhy: Server-side scripts execute with elevated privileges and represent an indirect but powerful path to platform compromise. A security_admin modifying a business rule can inject logic that runs on every transaction against a table. NIST SI-7 and CIS control 2.7 require integrity monitoring of executable code and configuration.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-4d2 admin script changes",
+  "priority": 4,
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "sys_id": "77f975122f97f2140fe9f74fafa4e3fb",
+  "sys_class_name": "scan_script_only_check"
+}

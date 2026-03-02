@@ -1,0 +1,16 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Identifies active scheduled script executions (sysauto_script) configured to run as a user with the admin role. These jobs execute on a schedule with the full privileges of the run-as user.\n\nWhy: Scheduled jobs running as admin operate with unrestricted access and no interactive session monitoring. If the run-as account is compromised or the job script is modified, it becomes a persistent backdoor. NIST AC-6(1) and CIS recommend that automated processes run with the minimum privileges required.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-10 sched job admin",
+  "priority": 4,
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "sys_id": "53f229062fdfb2148ff1641bcfa4e377",
+  "sys_class_name": "scan_script_only_check"
+}
