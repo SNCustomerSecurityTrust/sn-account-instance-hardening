@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Enumerates all active users with the security_admin role via direct and group-inherited assignments. Cross-references whether each user also holds the admin role, which compounds privilege. This query establishes the population used by queries 4b through 4e.\nWhy: The security_admin role controls ACLs, encryption, and role assignments. An unchecked security_admin population is a top-tier risk because it can modify the controls that protect everything else. NIST AC-6(5) requires that privileged accounts be inventoried and reviewed on a regular cadence.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-4a secadmin",
+  "priority": 3,
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Users with security_admin",
+  "sys_id": "29e31dca2f9bb2148ff1641bcfa4e3e0",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level 1"
+}

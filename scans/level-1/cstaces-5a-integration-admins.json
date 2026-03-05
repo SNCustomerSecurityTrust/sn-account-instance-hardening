@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Finds all active users flagged as web-service-access-only (integration/API accounts) that have been assigned roles containing \"admin\" in the name. These are non-interactive accounts with overly broad privileges.\nWhy: Integration accounts should follow the principle of least privilege more strictly than human accounts because they typically operate unattended and are harder to monitor for misuse. CIS and NIST AC-6(10) recommend that non-interactive service accounts be restricted to the minimum permissions required for their function.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-5a integration admins",
+  "priority": 2,
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Integration users with admin role",
+  "sys_id": "73c169822fdfb2148ff1641bcfa4e37e",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level 1"
+}

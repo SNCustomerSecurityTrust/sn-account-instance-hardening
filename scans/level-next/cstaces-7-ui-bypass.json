@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Identifies active UI policies that contain actions setting fields to non-mandatory. These policies can override mandatory field requirements configured at the dictionary or form level, allowing users to submit records with missing data.\n\nWhy: Mandatory field enforcement is a key data integrity control. UI policies that silently remove mandatory constraints can lead to incomplete records, broken workflows, and compliance gaps. CIS and NIST SI-10 require that input validation controls be consistently enforced and not overridden without authorization.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-7 ui bypass",
+  "priority": 4,
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "UI Policies Bypassing Mandatory Fields",
+  "sys_id": "52f37fb32fdfb6548ff1641bcfa4e32e",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Next"
+}

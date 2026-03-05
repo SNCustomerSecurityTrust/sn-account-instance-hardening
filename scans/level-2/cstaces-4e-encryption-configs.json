@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Detects modifications to Platform Encryption resources (crypto modules, key maps, keys, key stores, certificates, and encryption contexts) made by security_admin users in the last 30 days. Flags deactivation events and changes to high-risk KMF tables separately.\nWhy: Encryption key management is foundational to data protection. Unauthorized changes to encryption configuration can expose encrypted data at rest or render it unrecoverable. NIST SC-12 and SC-28 require that cryptographic key management activities be controlled and auditable.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-4e encryption configs",
+  "priority": 4,
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Find changes to Encryption config tables",
+  "sys_id": "e66bb1562f97f2140fe9f74fafa4e37e",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level 2"
+}

@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Retrieves key security-related system properties governing guest access, SSO enforcement, multi-provider SSO configuration, and session timeout values. Provides a snapshot of the instance's authentication posture.\nWhy: Weak authentication configuration is the most impactful category of misconfiguration in any enterprise platform. NIST IA-2, IA-8, and AC-12 require that systems enforce strong authentication, mandate SSO where available, and terminate sessions after defined inactivity periods.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-9a auth session prop",
+  "priority": 4,
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Review user session configs",
+  "sys_id": "e6dd395a2f97f2140fe9f74fafa4e374",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Next"
+}

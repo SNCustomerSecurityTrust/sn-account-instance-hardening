@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Identifies active users with admin or security_admin roles who do not have an active MFA device enrolled in ServiceNow's native MFA system (sys_user_mfa_device).\n\nWhy: Privileged accounts without MFA are the highest-value targets for credential-based attacks. NIST IA-2(1), PCI DSS 8.4, and virtually every modern compliance framework mandate multi-factor authentication for administrative access. A single compromised admin password without MFA can lead to full instance takeover.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-9b admin no mfa",
+  "priority": 2,
+  "resolution_details": "",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Admin Users Without MFA",
+  "sys_id": "4384b3372fdfb6548ff1641bcfa4e310",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Next"
+}

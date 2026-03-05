@@ -130,7 +130,9 @@ Security Center scores update automatically when Instance Scan runs execute. To 
 
 Each check below is a `scan_script_only_check` record deployed via the update set. Scripts execute server-side within the Instance Scan engine and generate findings automatically.
 
-Source files are available in [`scans/current/`](scans/current/) (`.js` for scripts, `.json` for metadata).
+Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.json` for metadata).
+
+## Level 1
 
 ### Users with Admin or Security Admin Roles
 
@@ -144,10 +146,8 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 ```javascript
 (function(engine) {
 
-
     var privilegedRoles = ['admin', 'security_admin', 'user_admin'];
     var privilegedUsers = {};
-
     function addUser(userSysId, role, source) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -176,7 +176,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
             }
         }
     }
-
     // Direct role assignments
     for (var i = 0; i < privilegedRoles.length; i++) {
         var roleName = privilegedRoles[i];
@@ -193,7 +192,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 			engine.finding.increment();
         }
     }
-
     // Group-inherited assignments
     for (var j = 0; j < privilegedRoles.length; j++) {
         var groupRoleName = privilegedRoles[j];
@@ -215,27 +213,22 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
             }
         }
     }
-
     var results = [];
     for (var uname in privilegedUsers) {
         results.push(privilegedUsers[uname]);
     }
-
     var multiRole = results.filter(function(u) {
         return u.roles.length > 1;
     });
     var serviceAccounts = results.filter(function(u) {
         return u.is_service_account;
     });
-
     // gs.info('Total privileged users: ' + results.length);
     // gs.info('Users with multiple high privilege roles: ' + multiRole.length);
     // gs.info('Potential service accounts: ' + serviceAccounts.length);
     // gs.info(JSON.stringify(results, null, 2));
 
-
     
-
 })(engine);
 ```
 
@@ -254,7 +247,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ```javascript
 (function(engine) {
-
     /**
      * Query 1b: Users with Multiple High-Privilege Roles
      *
@@ -272,7 +264,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
      *
      * Tables queried: sys_user_has_role, sys_group_has_role, sys_user_grmember
      */
-
     var privilegedRoles = [
         'admin',
         'security_admin',
@@ -282,9 +273,7 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
         'catalog_admin',
         'knowledge_admin'
     ];
-
     var privilegedUsers = {};
-
     function addUser(userSysId, role, source) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -313,7 +302,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
             }
         }
     }
-
     for (var i = 0; i < privilegedRoles.length; i++) {
         var roleName = privilegedRoles[i];
         var direct = new GlideRecord('sys_user_has_role');
@@ -329,7 +317,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 			engine.finding.increment();
         }
     }
-
     for (var j = 0; j < privilegedRoles.length; j++) {
         var groupRoleName = privilegedRoles[j];
         var groupRole = new GlideRecord('sys_group_has_role');
@@ -350,143 +337,21 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
             }
         }
     }
-
     var results = [];
     for (var uname in privilegedUsers) {
         if (privilegedUsers[uname].roles.length > 1) {
             results.push(privilegedUsers[uname]);
         }
     }
-
     results.sort(function(a, b) {
         return b.roles.length - a.roles.length;
     });
-
     var serviceAccounts = results.filter(function(u) {
         return u.is_service_account;
     });
-
     // gs.info('Users with multiple high-privilege roles: ' + results.length);
     // gs.info('Potential service accounts with multiple roles: ' + serviceAccounts.length);
     // gs.info(JSON.stringify(results, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Inactive users with elevated roles (older)
-
-**What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 90 days as highest reactivation risk.
-
-**Why:** If a deprovisioned account is reactivated (intentionally or accidentally), elevated access is immediately restored without requiring a new approval. This is a common gap in offboarding processes and violates NIST AC-2(3) requirements for disabling inactive accounts and revoking associated authorizations.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    var roleList = [
-        'admin',
-        'security_admin',
-        'user_admin',
-        'delegated_admin',
-        'impersonator',
-        'itil_admin',
-        'catalog_admin',
-        'knowledge_admin'
-    ];
-
-    var inactiveRoles = new GlideRecord('sys_user_has_role');
-    inactiveRoles.addQuery('role.name', 'IN', roleList.join(','));
-    inactiveRoles.addQuery('user.active', false);
-    inactiveRoles.addQuery('state', 'active'); // Role assignment is still active even though the user is not
-    inactiveRoles.query();
-
-    var direct = [];
-    var inherited = [];
-
-    while (inactiveRoles.next()) {
-
-		//var userRec = inactiveRoles.user.getRefRecord();
-		//engine.finding.setCurrentSource(userRec);
-		//engine.finding.increment();
-
-        var uname = inactiveRoles.user.user_name.toString();
-        var record = {
-            sys_id: inactiveRoles.getUniqueValue(),
-            user_sys_id: inactiveRoles.getValue('user'),
-            user_name: uname,
-            user_display_name: inactiveRoles.user.getDisplayValue(),
-            email: inactiveRoles.user.email.toString(),
-            role: inactiveRoles.role.name.toString(),
-            inherited: inactiveRoles.inherited.toString(),
-            sys_created_on: inactiveRoles.sys_created_on.toString(),
-            last_login: inactiveRoles.user.last_login_time.toString(),
-            locked_out: inactiveRoles.user.locked_out.toString(),
-            is_service_account: (uname.indexOf('svc') > -1 ||
-                uname.indexOf('service') > -1 ||
-                uname.indexOf('integration') > -1 ||
-                uname.indexOf('api') > -1) ? true : false
-        };
-
-        if (inactiveRoles.inherited.toString() === 'false') {
-            direct.push(record);
-        } else {
-            inherited.push(record);
-        }
-    }
-
-    // Flag recently deactivated users (last 60 days) - highest reactivation risk
-    // Note: uses sys_updated_on as proxy since ServiceNow has no dedicated deactivation timestamp
-    var recentlyDeactivated = [];
-    var allRecords = direct.concat(inherited);
-
-    for (var i = 0; i < allRecords.length; i++) {
-        var deactivatedUser = new GlideRecord('sys_user');
-        deactivatedUser.get(allRecords[i].user_sys_id);
-        var updatedOn = new GlideDateTime(deactivatedUser.sys_updated_on.toString());
-        var checkDaysAgo = new GlideDateTime();
-        checkDaysAgo.addDaysUTC(-60);
-        if (updatedOn.compareTo(checkDaysAgo) < 0) {
-			
-			engine.finding.setCurrentSource(deactivatedUser);
-			//engine.finding.setValue('finding_details','Found with DIRECT role assignment');
-			engine.finding.increment();
-
-            recentlyDeactivated.push({
-                user_name: allRecords[i].user_name,
-                user_display_name: allRecords[i].user_display_name,
-                email: allRecords[i].email,
-                role: allRecords[i].role,
-                inherited: allRecords[i].inherited,
-                is_service_account: allRecords[i].is_service_account,
-                deactivated_around: deactivatedUser.sys_updated_on.toString()
-            });
-        
-		}
-    }
-
-    var serviceAccounts = allRecords.filter(function(u) {
-        return u.is_service_account;
-    });
-
-    // gs.info('=== DEPROVISIONED USERS WITH PRIVILEGED ROLES ===');
-    // gs.info('Direct assignments (critical - survives reactivation): ' + direct.length);
-    // gs.info('Inherited assignments (high - survives reactivation): ' + inherited.length);
-    // gs.info('Total records: ' + (direct.length + inherited.length));
-    // gs.info('Recently deactivated (<90 days, highest reactivation risk): ' + recentlyDeactivated.length);
-    // gs.info('Potential service accounts: ' + serviceAccounts.length);
-    // gs.info('\nDirect assignments:');
-    // gs.info(JSON.stringify(direct, null, 2));
-    // gs.info('\nInherited assignments:');
-    // gs.info(JSON.stringify(inherited, null, 2));
-    // gs.info('\nRecently deactivated users:');
-    // gs.info(JSON.stringify(recentlyDeactivated, null, 2));
-
 })(engine);
 ```
 
@@ -505,7 +370,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ```javascript
 (function(engine) {
-
     var roleList = [
         'admin',
         'security_admin',
@@ -516,22 +380,17 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
         'catalog_admin',
         'knowledge_admin'
     ];
-
     var inactiveRoles = new GlideRecord('sys_user_has_role');
     inactiveRoles.addQuery('role.name', 'IN', roleList.join(','));
     inactiveRoles.addQuery('user.active', false);
     inactiveRoles.addQuery('state', 'active'); // Role assignment is still active even though the user is not
     inactiveRoles.query();
-
     var direct = [];
     var inherited = [];
-
     while (inactiveRoles.next()) {
-
 		//var userRec = inactiveRoles.user.getRefRecord();
 		//engine.finding.setCurrentSource(userRec);
 		//engine.finding.increment();
-
         var uname = inactiveRoles.user.user_name.toString();
         var record = {
             sys_id: inactiveRoles.getUniqueValue(),
@@ -549,19 +408,16 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
                 uname.indexOf('integration') > -1 ||
                 uname.indexOf('api') > -1) ? true : false
         };
-
         if (inactiveRoles.inherited.toString() === 'false') {
             direct.push(record);
         } else {
             inherited.push(record);
         }
     }
-
     // Flag recently deactivated users (last 60 days) - highest reactivation risk
     // Note: uses sys_updated_on as proxy since ServiceNow has no dedicated deactivation timestamp
     var recentlyDeactivated = [];
     var allRecords = direct.concat(inherited);
-
     for (var i = 0; i < allRecords.length; i++) {
         var deactivatedUser = new GlideRecord('sys_user');
         deactivatedUser.get(allRecords[i].user_sys_id);
@@ -573,7 +429,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 			engine.finding.setCurrentSource(deactivatedUser);
 			engine.finding.setValue('finding_details',i);
 			engine.finding.increment();
-
             recentlyDeactivated.push({
                 user_name: allRecords[i].user_name,
                 user_display_name: allRecords[i].user_display_name,
@@ -586,11 +441,9 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
         
 		}
     }
-
     var serviceAccounts = allRecords.filter(function(u) {
         return u.is_service_account;
     });
-
     // gs.info('=== DEPROVISIONED USERS WITH PRIVILEGED ROLES ===');
     // gs.info('Direct assignments (critical - survives reactivation): ' + direct.length);
     // gs.info('Inherited assignments (high - survives reactivation): ' + inherited.length);
@@ -603,13 +456,967 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
     // gs.info(JSON.stringify(inherited, null, 2));
     // gs.info('\nRecently deactivated users:');
     // gs.info(JSON.stringify(recentlyDeactivated, null, 2));
-
 })(engine);
 ```
 
 </details>
 
 ---
+
+### Inactive users with elevated roles (older)
+
+**What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 90 days as highest reactivation risk.
+
+**Why:** If a deprovisioned account is reactivated (intentionally or accidentally), elevated access is immediately restored without requiring a new approval. This is a common gap in offboarding processes and violates NIST AC-2(3) requirements for disabling inactive accounts and revoking associated authorizations.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    var roleList = [
+        'admin',
+        'security_admin',
+        'user_admin',
+        'delegated_admin',
+        'impersonator',
+        'itil_admin',
+        'catalog_admin',
+        'knowledge_admin'
+    ];
+    var inactiveRoles = new GlideRecord('sys_user_has_role');
+    inactiveRoles.addQuery('role.name', 'IN', roleList.join(','));
+    inactiveRoles.addQuery('user.active', false);
+    inactiveRoles.addQuery('state', 'active'); // Role assignment is still active even though the user is not
+    inactiveRoles.query();
+    var direct = [];
+    var inherited = [];
+    while (inactiveRoles.next()) {
+		//var userRec = inactiveRoles.user.getRefRecord();
+		//engine.finding.setCurrentSource(userRec);
+		//engine.finding.increment();
+        var uname = inactiveRoles.user.user_name.toString();
+        var record = {
+            sys_id: inactiveRoles.getUniqueValue(),
+            user_sys_id: inactiveRoles.getValue('user'),
+            user_name: uname,
+            user_display_name: inactiveRoles.user.getDisplayValue(),
+            email: inactiveRoles.user.email.toString(),
+            role: inactiveRoles.role.name.toString(),
+            inherited: inactiveRoles.inherited.toString(),
+            sys_created_on: inactiveRoles.sys_created_on.toString(),
+            last_login: inactiveRoles.user.last_login_time.toString(),
+            locked_out: inactiveRoles.user.locked_out.toString(),
+            is_service_account: (uname.indexOf('svc') > -1 ||
+                uname.indexOf('service') > -1 ||
+                uname.indexOf('integration') > -1 ||
+                uname.indexOf('api') > -1) ? true : false
+        };
+        if (inactiveRoles.inherited.toString() === 'false') {
+            direct.push(record);
+        } else {
+            inherited.push(record);
+        }
+    }
+    // Flag recently deactivated users (last 60 days) - highest reactivation risk
+    // Note: uses sys_updated_on as proxy since ServiceNow has no dedicated deactivation timestamp
+    var recentlyDeactivated = [];
+    var allRecords = direct.concat(inherited);
+    for (var i = 0; i < allRecords.length; i++) {
+        var deactivatedUser = new GlideRecord('sys_user');
+        deactivatedUser.get(allRecords[i].user_sys_id);
+        var updatedOn = new GlideDateTime(deactivatedUser.sys_updated_on.toString());
+        var checkDaysAgo = new GlideDateTime();
+        checkDaysAgo.addDaysUTC(-60);
+        if (updatedOn.compareTo(checkDaysAgo) < 0) {
+			
+			engine.finding.setCurrentSource(deactivatedUser);
+			//engine.finding.setValue('finding_details','Found with DIRECT role assignment');
+			engine.finding.increment();
+            recentlyDeactivated.push({
+                user_name: allRecords[i].user_name,
+                user_display_name: allRecords[i].user_display_name,
+                email: allRecords[i].email,
+                role: allRecords[i].role,
+                inherited: allRecords[i].inherited,
+                is_service_account: allRecords[i].is_service_account,
+                deactivated_around: deactivatedUser.sys_updated_on.toString()
+            });
+        
+		}
+    }
+    var serviceAccounts = allRecords.filter(function(u) {
+        return u.is_service_account;
+    });
+    // gs.info('=== DEPROVISIONED USERS WITH PRIVILEGED ROLES ===');
+    // gs.info('Direct assignments (critical - survives reactivation): ' + direct.length);
+    // gs.info('Inherited assignments (high - survives reactivation): ' + inherited.length);
+    // gs.info('Total records: ' + (direct.length + inherited.length));
+    // gs.info('Recently deactivated (<90 days, highest reactivation risk): ' + recentlyDeactivated.length);
+    // gs.info('Potential service accounts: ' + serviceAccounts.length);
+    // gs.info('\nDirect assignments:');
+    // gs.info(JSON.stringify(direct, null, 2));
+    // gs.info('\nInherited assignments:');
+    // gs.info(JSON.stringify(inherited, null, 2));
+    // gs.info('\nRecently deactivated users:');
+    // gs.info(JSON.stringify(recentlyDeactivated, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Users with impersonation ability
+
+**What:** Identifies all active users who can impersonate others by evaluating five vectors: direct impersonator role, direct admin role, direct security_admin role, group membership inheriting those roles, and role hierarchy where a parent role contains impersonator as a child.
+
+**Why:** Impersonation capability is often granted implicitly through admin or security_admin roles, making the true population of impersonators far larger than expected. NIST AC-6(1) requires organizations to explicitly authorize access to privileged functions, and impersonation must be inventoried across all grant vectors.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    var impersonators = {};
+    function addUser(userSysId, source) {
+        if (!userSysId) return;
+        var u = new GlideRecord('sys_user');
+        if (u.get(userSysId)) {
+            if (u.getValue('active') != '1') return;
+            var uname = u.user_name.toString();
+            if (!impersonators[uname]) {
+                impersonators[uname] = {
+                    user: u.name.toString(),
+                    user_name: uname,
+                    email: u.email.toString(),
+                    last_login: u.last_login_time.toString(),
+                    is_service_account: (uname.indexOf('svc') > -1 ||
+                        uname.indexOf('service') > -1 ||
+                        uname.indexOf('integration') > -1 ||
+                        uname.indexOf('api') > -1) ? true : false,
+                    sources: []
+                };
+            }
+            if (impersonators[uname].sources.indexOf(source) === -1) {
+                impersonators[uname].sources.push(source);
+            }
+        }
+    }
+    // 1. Direct impersonator role
+    var direct = new GlideRecord('sys_user_has_role');
+    direct.addQuery('role.name', 'impersonator');
+    direct.addQuery('user.active', 'true');
+    direct.addQuery('state', 'active');
+    direct.query();
+    while (direct.next()) {
+		var userRec = direct.user.getRefRecord();
+		engine.finding.setCurrentSource(userRec);
+		engine.finding.setValue('finding_details','Found with DIRECT IMPERSONATOR role assignment');
+		engine.finding.increment();
+        addUser(direct.getValue('user'), 'direct:impersonator');
+    }
+    // 2. Direct admin role (implicitly grants impersonation)
+    var adminDirect = new GlideRecord('sys_user_has_role');
+    adminDirect.addQuery('role.name', 'admin');
+    adminDirect.addQuery('user.active', 'true');
+    adminDirect.addQuery('state', 'active');
+    adminDirect.query();
+    while (adminDirect.next()) {
+		var userRec2 = adminDirect.user.getRefRecord();
+		engine.finding.setCurrentSource(userRec2);
+		engine.finding.setValue('finding_details','Found with ADMIN role assignment');
+		engine.finding.increment();
+        addUser(adminDirect.getValue('user'), 'direct:admin');
+    
+	}
+    // // 3. Direct security_admin role
+    // var secAdmin = new GlideRecord('sys_user_has_role');
+    // secAdmin.addQuery('role.name', 'security_admin');
+    // secAdmin.addQuery('user.active', 'true');
+    // secAdmin.addQuery('state', 'active');
+    // secAdmin.query();
+    // while (secAdmin.next()) {
+	// 	var userRec3 = secAdmin.user.getRefRecord();
+	// 	engine.finding.setCurrentSource(userRec3);
+	// 	engine.finding.increment();
+    //     addUser(secAdmin.getValue('user'), 'direct:security_admin');
+    // }
+    // 4. Group-inherited impersonator, admin, security_admin
+    var elevatedRoles = ['impersonator', 'admin'];
+    for (var e = 0; e < elevatedRoles.length; e++) {
+        var elevatedRoleName = elevatedRoles[e];
+        var groupRole = new GlideRecord('sys_group_has_role');
+        groupRole.addQuery('role.name', elevatedRoleName);
+        groupRole.query();
+        while (groupRole.next()) {
+            var groupName = groupRole.group.name.toString();
+            var member = new GlideRecord('sys_user_grmember');
+            member.addQuery('group', groupRole.getValue('group'));
+            member.addQuery('user.active', 'true');
+            member.query();
+            while (member.next()) {
+				var userRec4 = direct.user.getRefRecord();
+				engine.finding.setCurrentSource(userRec4);
+				engine.finding.setValue('finding_details','Found with GROUP INHEIRITED IMP role assignment');
+				engine.finding.increment();
+                addUser(member.getValue('user'), 'group:' + groupName + ':' + elevatedRoleName);
+            
+			}
+        }
+    }
+    // // 5. Parent roles containing impersonator as a child role (role hierarchy)
+    // var childRole = new GlideRecord('sys_user_role_contains');
+    // childRole.addQuery('role.name', 'impersonator');
+    // childRole.query();
+    // while (childRole.next()) {
+    //     var parentRoleName = childRole.parent.name.toString();
+    //     var parentRoleId = childRole.getValue('parent');
+    //     var parentUsers = new GlideRecord('sys_user_has_role');
+    //     parentUsers.addQuery('role', parentRoleId);
+    //     parentUsers.addQuery('user.active', 'true');
+    //     parentUsers.query();
+    //     while (parentUsers.next()) {
+	// 		var userRec5 = parentUsers.user.getRefRecord();
+	// 		engine.finding.setCurrentSource(userRec5);
+	// 		engine.finding.setValue('finding_details','Found with NESTED role assignment');
+	// 		engine.finding.increment();
+    //         addUser(parentUsers.getValue('user'), 'inherited_role:' + parentRoleName);
+    //     }
+    //     var parentGroups = new GlideRecord('sys_group_has_role');
+    //     parentGroups.addQuery('role', parentRoleId);
+    //     parentGroups.query();
+    //     while (parentGroups.next()) {
+    //         var gName = parentGroups.group.name.toString();
+    //         var gMembers = new GlideRecord('sys_user_grmember');
+    //         gMembers.addQuery('group', parentGroups.getValue('group'));
+    //         gMembers.addQuery('user.active', 'true');
+    //         gMembers.query();
+    //         while (gMembers.next()) {
+	// 			var userRec6 = gMembers.user.getRefRecord();
+	// 			engine.finding.setCurrentSource(userRec6);
+	// 			engine.finding.increment();
+    //             addUser(gMembers.getValue('user'), 'group_inherited_role:' + gName + ':' + parentRoleName);
+            
+	// 		}
+    //     }
+    // }
+    var results = [];
+    for (var uname in impersonators) {
+        results.push(impersonators[uname]);
+    }
+    var serviceAccounts = results.filter(function(u) {
+        return u.is_service_account;
+    });
+    var humanAccounts = results.filter(function(u) {
+        return !u.is_service_account;
+    });
+    // gs.info('Total users with impersonation capability: ' + results.length);
+    // gs.info('Human accounts: ' + humanAccounts.length);
+    // gs.info('Potential service accounts: ' + serviceAccounts.length);
+    // gs.info(JSON.stringify(results, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Find roles with nested impersonator
+
+**What:** Identifies all active users who can impersonate others by evaluating five vectors: direct impersonator role, direct admin role, direct security_admin role, group membership inheriting those roles, and role hierarchy where a parent role contains impersonator as a child.
+
+**Why:** Impersonation capability is often granted implicitly through admin or security_admin roles, making the true population of impersonators far larger than expected. NIST AC-6(1) requires organizations to explicitly authorize access to privileged functions, and impersonation must be inventoried across all grant vectors.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    // var impersonators = {};
+    // function addUser(userSysId, source) {
+    //     if (!userSysId) return;
+    //     var u = new GlideRecord('sys_user');
+    //     if (u.get(userSysId)) {
+    //         if (u.getValue('active') != '1') return;
+    //         var uname = u.user_name.toString();
+    //         if (!impersonators[uname]) {
+    //             impersonators[uname] = {
+    //                 user: u.name.toString(),
+    //                 user_name: uname,
+    //                 email: u.email.toString(),
+    //                 last_login: u.last_login_time.toString(),
+    //                 is_service_account: (uname.indexOf('svc') > -1 ||
+    //                     uname.indexOf('service') > -1 ||
+    //                     uname.indexOf('integration') > -1 ||
+    //                     uname.indexOf('api') > -1) ? true : false,
+    //                 sources: []
+    //             };
+    //         }
+    //         if (impersonators[uname].sources.indexOf(source) === -1) {
+    //             impersonators[uname].sources.push(source);
+    //         }
+    //     }
+    // }
+
+    // 5. Parent roles containing impersonator as a child role (role hierarchy)
+    var childRole = new GlideRecord('sys_user_role_contains');
+    childRole.addQuery('contains.name', 'impersonator');
+    childRole.query();
+    while (childRole.next()) {
+        var parentRoleName = childRole.parent.name.toString();
+        var parentRoleId = childRole.getValue('parent');
+        // var parentUsers = new GlideRecord('sys_user_has_role');
+        // parentUsers.addQuery('role', parentRoleId);
+        // parentUsers.addQuery('user.active', 'true');
+        // parentUsers.query();
+        // while (parentUsers.next()) {
+        //     var userRec5 = parentUsers.user.getRefRecord();
+		engine.finding.setCurrentSource(childRole);
+		engine.finding.setValue('finding_details', 'Found with NESTED IMPERSONATOR role assignment');
+		engine.finding.increment();
+        //     //addUser(parentUsers.getValue('user'), 'inherited_role:' + parentRoleName);
+        // }
+        var parentGroups = new GlideRecord('sys_group_has_role');
+        parentGroups.addQuery('role', parentRoleId);
+        parentGroups.query();
+        while (parentGroups.next()) {
+            var gName = parentGroups.group.name.toString();
+            var gMembers = new GlideRecord('sys_user_grmember');
+            gMembers.addQuery('group', parentGroups.getValue('group'));
+            gMembers.addQuery('user.active', 'true');
+            gMembers.query();
+            while (gMembers.next()) {
+                var userRec6 = gMembers.user.getRefRecord();
+                engine.finding.setCurrentSource(userRec6);
+				engine.finding.setValue('finding_details', 'Found with GROUP ASSIGNED NESTED role assignment');
+                engine.finding.increment();
+                //addUser(gMembers.getValue('user'), 'group_inherited_role:' + gName + ':' + parentRoleName);
+            }
+        }
+    }
+    // var results = [];
+    // for (var uname in impersonators) {
+    //     results.push(impersonators[uname]);
+    // }
+    // var serviceAccounts = results.filter(function(u) {
+    //     return u.is_service_account;
+    // });
+    // var humanAccounts = results.filter(function(u) {
+    //     return !u.is_service_account;
+    // });
+    // gs.info('Total users with impersonation capability: ' + results.length);
+    // gs.info('Human accounts: ' + humanAccounts.length);
+    // gs.info('Potential service accounts: ' + serviceAccounts.length);
+    // gs.info(JSON.stringify(results, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Users with security_admin
+
+**What:** Enumerates all active users with the security_admin role via direct and group-inherited assignments. Cross-references whether each user also holds the admin role, which compounds privilege. This query establishes the population used by queries 4b through 4e.
+
+**Why:** The security_admin role controls ACLs, encryption, and role assignments. An unchecked security_admin population is a top-tier risk because it can modify the controls that protect everything else. NIST AC-6(5) requires that privileged accounts be inventoried and reviewed on a regular cadence.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    var secAdmins = {};
+    function addUser(userSysId, source) {
+        if (!userSysId) return;
+        var u = new GlideRecord('sys_user');
+        if (u.get(userSysId)) {
+            if (u.getValue('active') != '1') return;
+            var uname = u.user_name.toString();
+            if (!secAdmins[uname]) {
+                secAdmins[uname] = {
+                    user: u.name.toString(),
+                    user_name: uname,
+                    email: u.email.toString(),
+                    last_login: u.last_login_time.toString(),
+                    is_service_account: (uname.indexOf('svc') > -1 ||
+                        uname.indexOf('service') > -1 ||
+                        uname.indexOf('integration') > -1 ||
+                        uname.indexOf('api') > -1) ? true : false,
+                    sources: []
+                };
+            }
+            if (secAdmins[uname].sources.indexOf(source) === -1) {
+                secAdmins[uname].sources.push(source);
+            }
+        }
+    }
+    var direct = new GlideRecord('sys_user_has_role');
+    direct.addQuery('role.name', 'security_admin');
+    direct.addQuery('user.active', 'true');
+    direct.addQuery('state', 'active');
+    direct.query();
+    while (direct.next()) {
+		var userRec = direct.user.getRefRecord();
+		engine.finding.setCurrentSource(userRec);
+		engine.finding.increment();
+        addUser(direct.getValue('user'), 'direct:security_admin');
+    }
+    var groupRole = new GlideRecord('sys_group_has_role');
+    groupRole.addQuery('role.name', 'security_admin');
+    groupRole.query();
+    while (groupRole.next()) {
+        var groupName = groupRole.group.name.toString();
+        var member = new GlideRecord('sys_user_grmember');
+        member.addQuery('group', groupRole.getValue('group'));
+        member.addQuery('user.active', 'true');
+        member.query();
+        while (member.next()) {
+			var userRec2 = groupRole.user.getRefRecord();
+			engine.finding.setCurrentSource(userRec2);
+			engine.finding.increment();
+            addUser(member.getValue('user'), 'group:' + groupName);
+        }
+    }
+    var results = [];
+    for (var uname in secAdmins) {
+        var entry = secAdmins[uname];
+        // Check if this user also holds the admin role (compounding privilege)
+        var adminCheck = new GlideRecord('sys_user_has_role');
+        adminCheck.addQuery('user.user_name', uname);
+        adminCheck.addQuery('role.name', 'admin');
+        adminCheck.addQuery('user.active', 'true');
+        adminCheck.addQuery('state', 'active');
+        adminCheck.query();
+        entry.has_admin = adminCheck.next() ? true : false;
+        results.push(entry);
+    }
+    var withAdmin = results.filter(function(u) {
+        return u.has_admin;
+    });
+    var withoutAdmin = results.filter(function(u) {
+        return !u.has_admin;
+    });
+    var serviceAccounts = results.filter(function(u) {
+        return u.is_service_account;
+    });
+    // gs.info('Total users with security_admin: ' + results.length);
+    // gs.info('Also have admin (compounding privilege): ' + withAdmin.length);
+    // gs.info('security_admin without admin: ' + withoutAdmin.length);
+    // gs.info('Potential service accounts: ' + serviceAccounts.length);
+    // gs.info(JSON.stringify(results, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Integration users with admin role
+
+**What:** Finds all active users flagged as web-service-access-only (integration/API accounts) that have been assigned roles containing "admin" in the name. These are non-interactive accounts with overly broad privileges.
+
+**Why:** Integration accounts should follow the principle of least privilege more strictly than human accounts because they typically operate unattended and are harder to monitor for misuse. CIS and NIST AC-6(10) recommend that non-interactive service accounts be restricted to the minimum permissions required for their function.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    // Find integration users with overly broad access
+    var integrationUser = new GlideRecord('sys_user');
+    integrationUser.addQuery('web_service_access_only', 'true');
+    integrationUser.addQuery('active', 'true');
+    integrationUser.query();
+    var integrationUsers = [];
+    while (integrationUser.next()) {
+        var roles = [];
+        var userRoleAssignment = new GlideRecord('sys_user_has_role');
+        userRoleAssignment.addQuery('user', integrationUser.getUniqueValue());
+        userRoleAssignment.query();
+        while (userRoleAssignment.next()) {
+            roles.push(userRoleAssignment.role.name.toString());
+        }
+        // Flag if integration user has any role containing "admin"
+        var hasAdminRole = false;
+        for (var i = 0; i < roles.length; i++) {
+            if (roles[i].indexOf('admin') > -1) {
+                hasAdminRole = true;
+                break;
+            }
+        }
+        if (hasAdminRole) {
+			engine.finding.setCurrentSource(integrationUser);
+			engine.finding.increment();
+            integrationUsers.push({
+                user: integrationUser.user_name.toString(),
+                name: integrationUser.name.toString(),
+                roles: roles,
+                last_login: integrationUser.last_login_time.toString()
+            });
+        }
+    }
+    //gs.warn('Integration users with admin roles: ' + JSON.stringify(integrationUsers, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+## Level 2
+
+### Users with security_admin
+
+**What:** Enumerates all active users with the security_admin role via direct and group-inherited assignments. Cross-references whether each user also holds the admin role, which compounds privilege. This query establishes the population used by queries 4b through 4e.
+
+**Why:** The security_admin role controls ACLs, encryption, and role assignments. An unchecked security_admin population is a top-tier risk because it can modify the controls that protect everything else. NIST AC-6(5) requires that privileged accounts be inventoried and reviewed on a regular cadence.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    var secAdmins = {};
+    function addUser(userSysId, source) {
+        if (!userSysId) return;
+        var u = new GlideRecord('sys_user');
+        if (u.get(userSysId)) {
+            if (u.getValue('active') != '1') return;
+            var uname = u.user_name.toString();
+            if (!secAdmins[uname]) {
+                secAdmins[uname] = {
+                    user: u.name.toString(),
+                    user_name: uname,
+                    email: u.email.toString(),
+                    last_login: u.last_login_time.toString(),
+                    is_service_account: (uname.indexOf('svc') > -1 ||
+                        uname.indexOf('service') > -1 ||
+                        uname.indexOf('integration') > -1 ||
+                        uname.indexOf('api') > -1) ? true : false,
+                    sources: []
+                };
+            }
+            if (secAdmins[uname].sources.indexOf(source) === -1) {
+                secAdmins[uname].sources.push(source);
+            }
+        }
+    }
+    var direct = new GlideRecord('sys_user_has_role');
+    direct.addQuery('role.name', 'security_admin');
+    direct.addQuery('user.active', 'true');
+    direct.addQuery('state', 'active');
+    direct.query();
+    while (direct.next()) {
+		var userRec = direct.user.getRefRecord();
+		engine.finding.setCurrentSource(userRec);
+		engine.finding.increment();
+        addUser(direct.getValue('user'), 'direct:security_admin');
+    }
+    var groupRole = new GlideRecord('sys_group_has_role');
+    groupRole.addQuery('role.name', 'security_admin');
+    groupRole.query();
+    while (groupRole.next()) {
+        var groupName = groupRole.group.name.toString();
+        var member = new GlideRecord('sys_user_grmember');
+        member.addQuery('group', groupRole.getValue('group'));
+        member.addQuery('user.active', 'true');
+        member.query();
+        while (member.next()) {
+			var userRec2 = groupRole.user.getRefRecord();
+			engine.finding.setCurrentSource(userRec2);
+			engine.finding.increment();
+            addUser(member.getValue('user'), 'group:' + groupName);
+        }
+    }
+    var results = [];
+    for (var uname in secAdmins) {
+        var entry = secAdmins[uname];
+        // Check if this user also holds the admin role (compounding privilege)
+        var adminCheck = new GlideRecord('sys_user_has_role');
+        adminCheck.addQuery('user.user_name', uname);
+        adminCheck.addQuery('role.name', 'admin');
+        adminCheck.addQuery('user.active', 'true');
+        adminCheck.addQuery('state', 'active');
+        adminCheck.query();
+        entry.has_admin = adminCheck.next() ? true : false;
+        results.push(entry);
+    }
+    var withAdmin = results.filter(function(u) {
+        return u.has_admin;
+    });
+    var withoutAdmin = results.filter(function(u) {
+        return !u.has_admin;
+    });
+    var serviceAccounts = results.filter(function(u) {
+        return u.is_service_account;
+    });
+    // gs.info('Total users with security_admin: ' + results.length);
+    // gs.info('Also have admin (compounding privilege): ' + withAdmin.length);
+    // gs.info('security_admin without admin: ' + withoutAdmin.length);
+    // gs.info('Potential service accounts: ' + serviceAccounts.length);
+    // gs.info(JSON.stringify(results, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Recent changes to ACLs and roles
+
+**What:** Detects ACL and role table changes made by security_admin users in the last 30 days by querying the audit log for modifications to sys_acl, sys_security_acl, sys_user_has_role, and sys_group_has_role.
+
+**Why:** ACL modification is the primary vector through which security_admin privilege can be used to escalate access. SOC 2 CC6.1 and NIST AU-12 require that changes to access control configurations be logged, attributed, and reviewed. Unmonitored ACL changes can silently dismantle an instance's security posture.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    var secAdminUsers = {};
+    function collectUser(userSysId) {
+        if (!userSysId) return;
+        var u = new GlideRecord('sys_user');
+        if (u.get(userSysId) && u.getValue('active') == '1') {
+            secAdminUsers[u.user_name.toString()] = u.name.toString();
+        }
+    }
+    var direct = new GlideRecord('sys_user_has_role');
+    direct.addQuery('role.name', 'security_admin');
+    direct.addQuery('user.active', 'true');
+    direct.addQuery('state', 'active');
+    direct.query();
+    while (direct.next()) {
+        collectUser(direct.getValue('user'));
+    }
+    var groupRole = new GlideRecord('sys_group_has_role');
+    groupRole.addQuery('role.name', 'security_admin');
+    groupRole.query();
+    while (groupRole.next()) {
+        var member = new GlideRecord('sys_user_grmember');
+        member.addQuery('group', groupRole.getValue('group'));
+        member.addQuery('user.active', 'true');
+        member.query();
+        while (member.next()) {
+            collectUser(member.getValue('user'));
+        }
+    }
+    var secAdminUsernames = [];
+    for (var u in secAdminUsers) {
+        secAdminUsernames.push(u);
+    }
+    //gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+    var highRiskTables = ['sys_acl', 'sys_security_acl', 'sys_user_has_role', 'sys_group_has_role'];
+    var aclChanges = [];
+    for (var i = 0; i < secAdminUsernames.length; i++) {
+        var uname = secAdminUsernames[i];
+        var audit = new GlideRecord('sys_audit');
+        audit.addQuery('user', uname);
+        audit.addQuery('tablename', 'IN', highRiskTables.join(','));
+        audit.addQuery('sys_created_on', '>', gs.daysAgo(30)); // Configurable lookback
+        audit.orderByDesc('sys_created_on');
+        audit.setLimit(100);
+        audit.query();
+        while (audit.next()) {
+			engine.finding.setCurrentSource(audit);
+			//engine.finding.setValue('finding_details','');
+			engine.finding.increment();
+
+            aclChanges.push({
+                timestamp: audit.sys_created_on.toString(),
+                user: uname,
+                display_name: secAdminUsers[uname],
+                table_modified: audit.tablename.toString(),
+                record_id: audit.documentkey.toString(),
+                field_changed: audit.fieldname.toString(),
+                old_value: audit.oldvalue.toString(),
+                new_value: audit.newvalue.toString()
+            });
+			
+        }
+    }
+    // gs.info('ACL modifications by security_admin users (last 30 days): ' + aclChanges.length);
+    // gs.info(JSON.stringify(aclChanges, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Review self-assigned admin roles
+
+**What:** Detects role assignment changes made by security_admin users in the last 30 days. Flags self-grants and grants of high-risk roles (admin, security_admin, impersonator) as the most direct indicators of privilege escalation.
+
+**Why:** Role grants are the most explicit form of privilege escalation. A security_admin granting themselves or others additional elevated roles bypasses intended approval workflows. NIST AC-6(5) and SOC 2 CC6.1 require that privileged role changes be authorized, logged, and reviewed for anomalous patterns.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    var secAdminUsers = {};
+    function collectUser(userSysId) {
+        if (!userSysId) return;
+        var u = new GlideRecord('sys_user');
+        if (u.get(userSysId) && u.getValue('active') == '1') {
+            secAdminUsers[u.user_name.toString()] = u.name.toString();
+        }
+    }
+    var direct = new GlideRecord('sys_user_has_role');
+    direct.addQuery('role.name', 'security_admin');
+    direct.addQuery('user.active', 'true');
+    direct.addQuery('state', 'active');
+    direct.query();
+    while (direct.next()) {
+        collectUser(direct.getValue('user'));
+    }
+    var groupRole = new GlideRecord('sys_group_has_role');
+    groupRole.addQuery('role.name', 'security_admin');
+    groupRole.query();
+    while (groupRole.next()) {
+        var member = new GlideRecord('sys_user_grmember');
+        member.addQuery('group', groupRole.getValue('group'));
+        member.addQuery('user.active', 'true');
+        member.query();
+        while (member.next()) {
+            collectUser(member.getValue('user'));
+        }
+    }
+    var secAdminUsernames = [];
+    for (var u in secAdminUsers) {
+        secAdminUsernames.push(u);
+    }
+    gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+    var highRiskRoles = ['admin', 'security_admin', 'impersonator'];
+    var roleGrantTables = ['sys_user_has_role', 'sys_group_has_role'];
+    var roleGrants = [];
+    for (var i = 0; i < secAdminUsernames.length; i++) {
+        var uname = secAdminUsernames[i];
+        var audit = new GlideRecord('sys_audit');
+        audit.addQuery('user', uname);
+        audit.addQuery('tablename', 'IN', roleGrantTables.join(','));
+        audit.addQuery('sys_created_on', '>', gs.daysAgo(30)); // Configurable lookback
+        audit.orderByDesc('sys_created_on');
+        audit.setLimit(100);
+        audit.query();
+        while (audit.next()) {
+            var roleName = '';
+            var recipient = '';
+            var tableModified = audit.tablename.toString();
+            var roleRecord = new GlideRecord(tableModified);
+            if (roleRecord.get(audit.documentkey.toString())) {
+                roleName = roleRecord.role.name.toString();
+                recipient = tableModified === 'sys_user_has_role' ?
+                    roleRecord.user.user_name.toString() :
+                    roleRecord.group.name.toString();
+            }
+            var isSelfGrant = (recipient === uname);
+            var isHighRisk = false;
+            for (var j = 0; j < highRiskRoles.length; j++) {
+                if (roleName === highRiskRoles[j]) {
+                    isHighRisk = true;
+                    break;
+                }
+            }
+            roleGrants.push({
+                timestamp: audit.sys_created_on.toString(),
+                granted_by: uname,
+                granted_by_display: secAdminUsers[uname],
+                recipient: recipient,
+                role_granted: roleName,
+                table: tableModified,
+                field_changed: audit.fieldname.toString(),
+                old_value: audit.oldvalue.toString(),
+                new_value: audit.newvalue.toString(),
+                is_self_grant: isSelfGrant,
+                is_high_risk_role: isHighRisk
+            });
+        }
+    }
+    var highRiskGrants = [];
+    var selfGrants = [];
+    for (var k = 0; k < roleGrants.length; k++) {
+        if (roleGrants[k].is_self_grant) selfGrants.push(roleGrants[k]);
+        if (roleGrants[k].is_high_risk_role) highRiskGrants.push(roleGrants[k]);
+    }
+    gs.info('Total role grants by security_admin users (last 30 days): ' + roleGrants.length);
+    gs.info('High risk role grants (admin/security_admin/impersonator): ' + highRiskGrants.length);
+    gs.info('Self grants: ' + selfGrants.length);
+    gs.info(JSON.stringify(roleGrants, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Find changes to Encryption config tables
+
+**What:** Detects modifications to Platform Encryption resources (crypto modules, key maps, keys, key stores, certificates, and encryption contexts) made by security_admin users in the last 30 days. Flags deactivation events and changes to high-risk KMF tables separately.
+
+**Why:** Encryption key management is foundational to data protection. Unauthorized changes to encryption configuration can expose encrypted data at rest or render it unrecoverable. NIST SC-12 and SC-28 require that cryptographic key management activities be controlled and auditable.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    var secAdminUsers = {};
+    function collectUser(userSysId) {
+        if (!userSysId) return;
+        var u = new GlideRecord('sys_user');
+        if (u.get(userSysId) && u.getValue('active') == '1') {
+            secAdminUsers[u.user_name.toString()] = u.name.toString();
+        }
+    }
+    var direct = new GlideRecord('sys_user_has_role');
+    direct.addQuery('role.name', 'admin');
+    direct.addQuery('user.active', 'true');
+    direct.addQuery('state', 'active');
+    direct.query();
+    while (direct.next()) {
+        collectUser(direct.getValue('user'));
+    }
+    var groupRole = new GlideRecord('sys_group_has_role');
+    groupRole.addQuery('role.name', 'admin');
+    groupRole.query();
+    while (groupRole.next()) {
+        var member = new GlideRecord('sys_user_grmember');
+        member.addQuery('group', groupRole.getValue('group'));
+        member.addQuery('user.active', 'true');
+        member.query();
+        while (member.next()) {
+            collectUser(member.getValue('user'));
+        }
+    }
+    var secAdminUsernames = [];
+    for (var u in secAdminUsers) {
+        secAdminUsernames.push(u);
+    }
+    //gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+    var encryptionTables = [
+        'sys_kmf_crypto_module', // Crypto modules
+        'sys_kmf_map', // Key maps (which fields are encrypted)
+        'sys_kmf_key', // Encryption keys
+        'sys_kmf_key_store', // Key stores
+        'sys_kmf_key_store_alias', // Key store aliases
+        'sys_kmf_crypto_spec', // Crypto specifications
+        'sys_kmf_key_lifecycle', // Key lifecycle policies
+        'sys_certificate', // Certificates
+        'sys_encryption_context' // Encryption contexts
+    ];
+    var highRiskTables = ['sys_kmf_map', 'sys_kmf_key', 'sys_kmf_crypto_module'];
+    var encryptionChanges = [];
+    for (var i = 0; i < secAdminUsernames.length; i++) {
+        var uname = secAdminUsernames[i];
+        var audit = new GlideRecord('sys_audit');
+        audit.addQuery('user', uname);
+        audit.addQuery('tablename', 'IN', encryptionTables.join(','));
+        audit.addQuery('sys_created_on', '>', gs.daysAgo(30)); // Configurable lookback
+        audit.orderByDesc('sys_created_on');
+        audit.setLimit(100);
+        audit.query();
+        while (audit.next()) {
+            var tableModified = audit.tablename.toString();
+            var recordId = audit.documentkey.toString();
+            var recordName = '';
+            var encRecord = new GlideRecord(tableModified);
+            if (encRecord.get(recordId)) {
+                recordName = encRecord.name.toString();
+            }
+            var fieldChanged = audit.fieldname.toString();
+            var oldValue = audit.oldvalue.toString();
+            var newValue = audit.newvalue.toString();
+            var isDeactivation = (fieldChanged === 'active' && oldValue === '1' && newValue === '0');
+            var isHighRisk = false;
+            for (var j = 0; j < highRiskTables.length; j++) {
+                if (tableModified === highRiskTables[j]) {
+                    isHighRisk = true;
+                    break;
+                }
+            }
+
+			var encryptionAuditObj = {
+                timestamp: audit.sys_created_on.toString(),
+                changed_by: uname,
+                changed_by_display: secAdminUsers[uname],
+                table: tableModified,
+                record_name: recordName,
+                field_changed: fieldChanged,
+                old_value: oldValue,
+                new_value: newValue,
+                is_deactivation: isDeactivation,
+                is_high_risk_table: isHighRisk
+            };
+            encryptionChanges.push(encryptionAuditObj);
+			engine.finding.setCurrentSource(encRecord);
+			engine.finding.setValue('finding_details',JSON.stringify(encryptionAuditObj,null,4));
+			engine.finding.increment();
+        }
+    }
+    var deactivations = [];
+    var highRiskChanges = [];
+    var otherChanges = [];
+    for (var k = 0; k < encryptionChanges.length; k++) {
+        if (encryptionChanges[k].is_deactivation) {
+            deactivations.push(encryptionChanges[k]);
+        } else if (encryptionChanges[k].is_high_risk_table) {
+            highRiskChanges.push(encryptionChanges[k]);
+        } else {
+            otherChanges.push(encryptionChanges[k]);
+        }
+    }
+    gs.info('Total encryption changes by security_admin users (last 30 days): ' + encryptionChanges.length);
+    gs.info('Deactivation events: ' + deactivations.length);
+    gs.info('High risk table changes (sys_kmf_map, sys_kmf_key, sys_kmf_crypto_module): ' + highRiskChanges.length);
+    gs.info('Other encryption changes: ' + otherChanges.length);
+    gs.info(JSON.stringify(encryptionChanges, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Review active OAuth IDs
+
+**What:** Audits all active OAuth application registrations, capturing client IDs, redirect URLs, and access/refresh token lifespans. Identifies applications that may have excessively long token lifetimes.
+
+**Why:** OAuth tokens are bearer credentials - anyone who possesses a valid token can use it. Excessively long token lifespans increase the window of opportunity for token theft and replay. NIST IA-5(13) and OAuth 2.0 Security Best Current Practice (RFC 9700) recommend short-lived access tokens and bounded refresh token lifetimes.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    // Audit active OAuth applications and their token lifespans
+    var oauthEntity = new GlideRecord('oauth_entity');
+    oauthEntity.addQuery('active', 'true');
+    oauthEntity.query();
+    var oauthApps = [];
+    while (oauthEntity.next()) {
+		engine.finding.setCurrentSource(oauthEntity);
+		engine.finding.increment();
+        oauthApps.push({
+            name: oauthEntity.name.toString(),
+            client_id: oauthEntity.client_id.toString(),
+            redirect_url: oauthEntity.redirect_url.toString(),
+            access_token_lifespan: oauthEntity.access_token_lifespan.toString(),
+            refresh_token_lifespan: oauthEntity.refresh_token_lifespan.toString()
+        });
+    }
+    //gs.info('Active OAuth applications: ' + JSON.stringify(oauthApps, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+## Level 3
 
 ### Find ACLs overly permissive
 
@@ -623,10 +1430,8 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 ```javascript
 (function(engine) {
 
-
     var riskyACLs = [];
     var aclsWithRoles = {};
-
     // Build lookup of ACLs that have role restrictions to avoid N+1 query overhead
     var aclRoleEntry = new GlideRecord('sys_security_acl_role');
     aclRoleEntry.addNotNullQuery('sys_security_acl');
@@ -634,7 +1439,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
     while (aclRoleEntry.next()) {
         aclsWithRoles[aclRoleEntry.sys_security_acl.toString()] = true;
     }
-
     // Query active ACLs with no condition and no script
     var aclRecord = new GlideRecord('sys_security_acl');
     aclRecord.addQuery('active', 'true');
@@ -642,21 +1446,16 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
     aclRecord.addNullQuery('script');
     aclRecord.addQuery('sys_policy', '!=', 'read'); // Exclude read-only locked OOB records
     aclRecord.query();
-
     while (aclRecord.next()) {
         var sysId = aclRecord.sys_id.toString();
-
         // Skip ACLs that have role restrictions
         if (aclsWithRoles[sysId]) {
             continue;
         }
-
         var operation = aclRecord.operation.toString();
         var riskLevel = 'LOW';
-
 		engine.finding.setCurrentSource(aclRecord);
 		engine.finding.increment();
-
 
         if (operation === '*') {
             riskLevel = 'CRITICAL'; // Wildcard operation with no controls whatsoever
@@ -665,7 +1464,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
         } else if (operation === 'read') {
             riskLevel = 'MEDIUM';
         }
-
         riskyACLs.push({
             sys_id: sysId,
             name: aclRecord.name.toString(),
@@ -677,7 +1475,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
             sys_update_name: aclRecord.sys_update_name.toString()
         });
     }
-
     // Sort by risk level for triage
     var riskOrder = {
         'CRITICAL': 0,
@@ -688,7 +1485,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
     riskyACLs.sort(function(a, b) {
         return riskOrder[a.risk_level] - riskOrder[b.risk_level];
     });
-
     // gs.info('=== OVERLY PERMISSIVE ACL SCAN ===');
     // gs.info('Total findings: ' + riskyACLs.length);
     // gs.info('CRITICAL: ' + riskyACLs.filter(function(a) {
@@ -704,8 +1500,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
     //     return a.risk_level === 'LOW';
     // }).length);
     // gs.info('Full results: ' + JSON.stringify(riskyACLs, null, 2));
-
-
 
 })(engine);
 ```
@@ -725,7 +1519,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ```javascript
 (function (engine) {
-
 
     var patterns = {
         UNCONDITIONAL_GRANT: [
@@ -754,46 +1547,36 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
             'hardcoded'
         ]
     };
-
     var concernOrder = ['UNCONDITIONAL_GRANT', 'BYPASS_PATTERN', 'DYNAMIC_BEHAVIOR', 'INCOMPLETE_LOGIC'];
     var suspiciousACLs = {};
-
     var aclRecord = new GlideRecord('sys_security_acl');
     aclRecord.addQuery('active', 'true');
     aclRecord.addNotNullQuery('script');
     aclRecord.query();
-
     while (aclRecord.next()) {
         var script = aclRecord.script.toString();
         var scriptLower = script.toLowerCase().replace(/\s+/g, ' ');
         var sysId = aclRecord.sys_id.toString();
-
         var matchedPatterns = [];
         var highestConcern = null;
-
         for (var category in patterns) {
             var patternList = patterns[category];
             for (var i = 0; i < patternList.length; i++) {
                 if (scriptLower.indexOf(patternList[i]) > -1) {
-
                     matchedPatterns.push({
                         pattern: patternList[i],
                         category: category
                     });
-
                     if (highestConcern === null ||
                         concernOrder.indexOf(category) < concernOrder.indexOf(highestConcern)) {
                         highestConcern = category;
                     }
-
 					engine.finding.setCurrentSource(aclRecord);
 					engine.finding.setValue('finding_details', JSON.stringify(matchedPatterns));
 					engine.finding.increment();
-
                 }
             }
         }
-
         if (matchedPatterns.length > 0) {
             suspiciousACLs[sysId] = {
                 sys_id: sysId,
@@ -809,7 +1592,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
             };
         }
     }
-
     var results = [];
     for (var id in suspiciousACLs) {
         results.push(suspiciousACLs[id]);
@@ -817,7 +1599,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
     results.sort(function(a, b) {
         return concernOrder.indexOf(a.highest_concern) - concernOrder.indexOf(b.highest_concern);
     });
-
     // gs.info('=== ACL DANGEROUS SCRIPT SCAN ===');
     // gs.info('Total findings: ' + results.length);
     // gs.info('Unconditional grants: ' + results.filter(function(a) { return a.highest_concern === 'UNCONDITIONAL_GRANT'; }).length);
@@ -825,1226 +1606,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
     // gs.info('Dynamic behavior: ' + results.filter(function(a) { return a.highest_concern === 'DYNAMIC_BEHAVIOR'; }).length);
     // gs.info('Incomplete logic: ' + results.filter(function(a) { return a.highest_concern === 'INCOMPLETE_LOGIC'; }).length);
     // gs.info(JSON.stringify(results, null, 2));
-
-
-
-})(engine);
-```
-
-</details>
-
----
-
-### Find roles with nested impersonator
-
-**What:** Identifies all active users who can impersonate others by evaluating five vectors: direct impersonator role, direct admin role, direct security_admin role, group membership inheriting those roles, and role hierarchy where a parent role contains impersonator as a child.
-
-**Why:** Impersonation capability is often granted implicitly through admin or security_admin roles, making the true population of impersonators far larger than expected. NIST AC-6(1) requires organizations to explicitly authorize access to privileged functions, and impersonation must be inventoried across all grant vectors.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    // var impersonators = {};
-
-    // function addUser(userSysId, source) {
-    //     if (!userSysId) return;
-    //     var u = new GlideRecord('sys_user');
-    //     if (u.get(userSysId)) {
-    //         if (u.getValue('active') != '1') return;
-    //         var uname = u.user_name.toString();
-    //         if (!impersonators[uname]) {
-    //             impersonators[uname] = {
-    //                 user: u.name.toString(),
-    //                 user_name: uname,
-    //                 email: u.email.toString(),
-    //                 last_login: u.last_login_time.toString(),
-    //                 is_service_account: (uname.indexOf('svc') > -1 ||
-    //                     uname.indexOf('service') > -1 ||
-    //                     uname.indexOf('integration') > -1 ||
-    //                     uname.indexOf('api') > -1) ? true : false,
-    //                 sources: []
-    //             };
-    //         }
-    //         if (impersonators[uname].sources.indexOf(source) === -1) {
-    //             impersonators[uname].sources.push(source);
-    //         }
-    //     }
-    // }
-
-
-    // 5. Parent roles containing impersonator as a child role (role hierarchy)
-    var childRole = new GlideRecord('sys_user_role_contains');
-    childRole.addQuery('contains.name', 'impersonator');
-    childRole.query();
-    while (childRole.next()) {
-        var parentRoleName = childRole.parent.name.toString();
-        var parentRoleId = childRole.getValue('parent');
-
-        // var parentUsers = new GlideRecord('sys_user_has_role');
-        // parentUsers.addQuery('role', parentRoleId);
-        // parentUsers.addQuery('user.active', 'true');
-        // parentUsers.query();
-        // while (parentUsers.next()) {
-
-        //     var userRec5 = parentUsers.user.getRefRecord();
-		engine.finding.setCurrentSource(childRole);
-		engine.finding.setValue('finding_details', 'Found with NESTED IMPERSONATOR role assignment');
-		engine.finding.increment();
-
-        //     //addUser(parentUsers.getValue('user'), 'inherited_role:' + parentRoleName);
-
-        // }
-
-        var parentGroups = new GlideRecord('sys_group_has_role');
-        parentGroups.addQuery('role', parentRoleId);
-        parentGroups.query();
-        while (parentGroups.next()) {
-            var gName = parentGroups.group.name.toString();
-            var gMembers = new GlideRecord('sys_user_grmember');
-            gMembers.addQuery('group', parentGroups.getValue('group'));
-            gMembers.addQuery('user.active', 'true');
-            gMembers.query();
-            while (gMembers.next()) {
-
-                var userRec6 = gMembers.user.getRefRecord();
-                engine.finding.setCurrentSource(userRec6);
-				engine.finding.setValue('finding_details', 'Found with GROUP ASSIGNED NESTED role assignment');
-                engine.finding.increment();
-
-                //addUser(gMembers.getValue('user'), 'group_inherited_role:' + gName + ':' + parentRoleName);
-
-            }
-        }
-    }
-
-    // var results = [];
-    // for (var uname in impersonators) {
-    //     results.push(impersonators[uname]);
-    // }
-
-    // var serviceAccounts = results.filter(function(u) {
-    //     return u.is_service_account;
-    // });
-    // var humanAccounts = results.filter(function(u) {
-    //     return !u.is_service_account;
-    // });
-
-    // gs.info('Total users with impersonation capability: ' + results.length);
-    // gs.info('Human accounts: ' + humanAccounts.length);
-    // gs.info('Potential service accounts: ' + serviceAccounts.length);
-    // gs.info(JSON.stringify(results, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Users with impersonation ability
-
-**What:** Identifies all active users who can impersonate others by evaluating five vectors: direct impersonator role, direct admin role, direct security_admin role, group membership inheriting those roles, and role hierarchy where a parent role contains impersonator as a child.
-
-**Why:** Impersonation capability is often granted implicitly through admin or security_admin roles, making the true population of impersonators far larger than expected. NIST AC-6(1) requires organizations to explicitly authorize access to privileged functions, and impersonation must be inventoried across all grant vectors.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    var impersonators = {};
-
-    function addUser(userSysId, source) {
-        if (!userSysId) return;
-        var u = new GlideRecord('sys_user');
-        if (u.get(userSysId)) {
-            if (u.getValue('active') != '1') return;
-            var uname = u.user_name.toString();
-            if (!impersonators[uname]) {
-                impersonators[uname] = {
-                    user: u.name.toString(),
-                    user_name: uname,
-                    email: u.email.toString(),
-                    last_login: u.last_login_time.toString(),
-                    is_service_account: (uname.indexOf('svc') > -1 ||
-                        uname.indexOf('service') > -1 ||
-                        uname.indexOf('integration') > -1 ||
-                        uname.indexOf('api') > -1) ? true : false,
-                    sources: []
-                };
-            }
-            if (impersonators[uname].sources.indexOf(source) === -1) {
-                impersonators[uname].sources.push(source);
-            }
-        }
-    }
-
-    // 1. Direct impersonator role
-    var direct = new GlideRecord('sys_user_has_role');
-    direct.addQuery('role.name', 'impersonator');
-    direct.addQuery('user.active', 'true');
-    direct.addQuery('state', 'active');
-    direct.query();
-    while (direct.next()) {
-
-		var userRec = direct.user.getRefRecord();
-		engine.finding.setCurrentSource(userRec);
-		engine.finding.setValue('finding_details','Found with DIRECT IMPERSONATOR role assignment');
-		engine.finding.increment();
-
-        addUser(direct.getValue('user'), 'direct:impersonator');
-
-    }
-
-    // 2. Direct admin role (implicitly grants impersonation)
-    var adminDirect = new GlideRecord('sys_user_has_role');
-    adminDirect.addQuery('role.name', 'admin');
-    adminDirect.addQuery('user.active', 'true');
-    adminDirect.addQuery('state', 'active');
-    adminDirect.query();
-    while (adminDirect.next()) {
-
-		var userRec2 = adminDirect.user.getRefRecord();
-		engine.finding.setCurrentSource(userRec2);
-		engine.finding.setValue('finding_details','Found with ADMIN role assignment');
-		engine.finding.increment();
-
-        addUser(adminDirect.getValue('user'), 'direct:admin');
-    
-	}
-
-    // // 3. Direct security_admin role
-    // var secAdmin = new GlideRecord('sys_user_has_role');
-    // secAdmin.addQuery('role.name', 'security_admin');
-    // secAdmin.addQuery('user.active', 'true');
-    // secAdmin.addQuery('state', 'active');
-    // secAdmin.query();
-    // while (secAdmin.next()) {
-
-	// 	var userRec3 = secAdmin.user.getRefRecord();
-	// 	engine.finding.setCurrentSource(userRec3);
-	// 	engine.finding.increment();
-
-    //     addUser(secAdmin.getValue('user'), 'direct:security_admin');
-
-    // }
-
-    // 4. Group-inherited impersonator, admin, security_admin
-    var elevatedRoles = ['impersonator', 'admin'];
-    for (var e = 0; e < elevatedRoles.length; e++) {
-        var elevatedRoleName = elevatedRoles[e];
-        var groupRole = new GlideRecord('sys_group_has_role');
-        groupRole.addQuery('role.name', elevatedRoleName);
-        groupRole.query();
-        while (groupRole.next()) {
-            var groupName = groupRole.group.name.toString();
-            var member = new GlideRecord('sys_user_grmember');
-            member.addQuery('group', groupRole.getValue('group'));
-            member.addQuery('user.active', 'true');
-            member.query();
-            while (member.next()) {
-
-				var userRec4 = direct.user.getRefRecord();
-				engine.finding.setCurrentSource(userRec4);
-				engine.finding.setValue('finding_details','Found with GROUP INHEIRITED IMP role assignment');
-				engine.finding.increment();
-
-                addUser(member.getValue('user'), 'group:' + groupName + ':' + elevatedRoleName);
-            
-			}
-        }
-    }
-
-    // // 5. Parent roles containing impersonator as a child role (role hierarchy)
-    // var childRole = new GlideRecord('sys_user_role_contains');
-    // childRole.addQuery('role.name', 'impersonator');
-    // childRole.query();
-    // while (childRole.next()) {
-    //     var parentRoleName = childRole.parent.name.toString();
-    //     var parentRoleId = childRole.getValue('parent');
-
-    //     var parentUsers = new GlideRecord('sys_user_has_role');
-    //     parentUsers.addQuery('role', parentRoleId);
-    //     parentUsers.addQuery('user.active', 'true');
-    //     parentUsers.query();
-    //     while (parentUsers.next()) {
-
-	// 		var userRec5 = parentUsers.user.getRefRecord();
-	// 		engine.finding.setCurrentSource(userRec5);
-	// 		engine.finding.setValue('finding_details','Found with NESTED role assignment');
-	// 		engine.finding.increment();
-
-    //         addUser(parentUsers.getValue('user'), 'inherited_role:' + parentRoleName);
-
-    //     }
-
-    //     var parentGroups = new GlideRecord('sys_group_has_role');
-    //     parentGroups.addQuery('role', parentRoleId);
-    //     parentGroups.query();
-    //     while (parentGroups.next()) {
-    //         var gName = parentGroups.group.name.toString();
-    //         var gMembers = new GlideRecord('sys_user_grmember');
-    //         gMembers.addQuery('group', parentGroups.getValue('group'));
-    //         gMembers.addQuery('user.active', 'true');
-    //         gMembers.query();
-    //         while (gMembers.next()) {
-
-	// 			var userRec6 = gMembers.user.getRefRecord();
-	// 			engine.finding.setCurrentSource(userRec6);
-	// 			engine.finding.increment();
-
-    //             addUser(gMembers.getValue('user'), 'group_inherited_role:' + gName + ':' + parentRoleName);
-            
-	// 		}
-    //     }
-    // }
-
-    var results = [];
-    for (var uname in impersonators) {
-        results.push(impersonators[uname]);
-    }
-
-    var serviceAccounts = results.filter(function(u) {
-        return u.is_service_account;
-    });
-    var humanAccounts = results.filter(function(u) {
-        return !u.is_service_account;
-    });
-
-    // gs.info('Total users with impersonation capability: ' + results.length);
-    // gs.info('Human accounts: ' + humanAccounts.length);
-    // gs.info('Potential service accounts: ' + serviceAccounts.length);
-    // gs.info(JSON.stringify(results, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Users with security_admin
-
-**What:** Enumerates all active users with the security_admin role via direct and group-inherited assignments. Cross-references whether each user also holds the admin role, which compounds privilege. This query establishes the population used by queries 4b through 4e.
-
-**Why:** The security_admin role controls ACLs, encryption, and role assignments. An unchecked security_admin population is a top-tier risk because it can modify the controls that protect everything else. NIST AC-6(5) requires that privileged accounts be inventoried and reviewed on a regular cadence.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    var secAdmins = {};
-
-    function addUser(userSysId, source) {
-        if (!userSysId) return;
-        var u = new GlideRecord('sys_user');
-        if (u.get(userSysId)) {
-            if (u.getValue('active') != '1') return;
-            var uname = u.user_name.toString();
-            if (!secAdmins[uname]) {
-                secAdmins[uname] = {
-                    user: u.name.toString(),
-                    user_name: uname,
-                    email: u.email.toString(),
-                    last_login: u.last_login_time.toString(),
-                    is_service_account: (uname.indexOf('svc') > -1 ||
-                        uname.indexOf('service') > -1 ||
-                        uname.indexOf('integration') > -1 ||
-                        uname.indexOf('api') > -1) ? true : false,
-                    sources: []
-                };
-            }
-            if (secAdmins[uname].sources.indexOf(source) === -1) {
-                secAdmins[uname].sources.push(source);
-            }
-        }
-    }
-
-    var direct = new GlideRecord('sys_user_has_role');
-    direct.addQuery('role.name', 'security_admin');
-    direct.addQuery('user.active', 'true');
-    direct.addQuery('state', 'active');
-    direct.query();
-    while (direct.next()) {
-
-		var userRec = direct.user.getRefRecord();
-		engine.finding.setCurrentSource(userRec);
-		engine.finding.increment();
-
-        addUser(direct.getValue('user'), 'direct:security_admin');
-    }
-
-    var groupRole = new GlideRecord('sys_group_has_role');
-    groupRole.addQuery('role.name', 'security_admin');
-    groupRole.query();
-    while (groupRole.next()) {
-        var groupName = groupRole.group.name.toString();
-        var member = new GlideRecord('sys_user_grmember');
-        member.addQuery('group', groupRole.getValue('group'));
-        member.addQuery('user.active', 'true');
-        member.query();
-        while (member.next()) {
-
-			var userRec2 = groupRole.user.getRefRecord();
-			engine.finding.setCurrentSource(userRec2);
-			engine.finding.increment();
-
-            addUser(member.getValue('user'), 'group:' + groupName);
-        }
-    }
-
-    var results = [];
-    for (var uname in secAdmins) {
-        var entry = secAdmins[uname];
-        // Check if this user also holds the admin role (compounding privilege)
-        var adminCheck = new GlideRecord('sys_user_has_role');
-        adminCheck.addQuery('user.user_name', uname);
-        adminCheck.addQuery('role.name', 'admin');
-        adminCheck.addQuery('user.active', 'true');
-        adminCheck.addQuery('state', 'active');
-        adminCheck.query();
-        entry.has_admin = adminCheck.next() ? true : false;
-        results.push(entry);
-    }
-
-    var withAdmin = results.filter(function(u) {
-        return u.has_admin;
-    });
-    var withoutAdmin = results.filter(function(u) {
-        return !u.has_admin;
-    });
-    var serviceAccounts = results.filter(function(u) {
-        return u.is_service_account;
-    });
-
-    // gs.info('Total users with security_admin: ' + results.length);
-    // gs.info('Also have admin (compounding privilege): ' + withAdmin.length);
-    // gs.info('security_admin without admin: ' + withoutAdmin.length);
-    // gs.info('Potential service accounts: ' + serviceAccounts.length);
-    // gs.info(JSON.stringify(results, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Recent changes to ACLs and roles
-
-**What:** Detects ACL and role table changes made by security_admin users in the last 30 days by querying the audit log for modifications to sys_acl, sys_security_acl, sys_user_has_role, and sys_group_has_role.
-
-**Why:** ACL modification is the primary vector through which security_admin privilege can be used to escalate access. SOC 2 CC6.1 and NIST AU-12 require that changes to access control configurations be logged, attributed, and reviewed. Unmonitored ACL changes can silently dismantle an instance's security posture.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    var secAdminUsers = {};
-
-    function collectUser(userSysId) {
-        if (!userSysId) return;
-        var u = new GlideRecord('sys_user');
-        if (u.get(userSysId) && u.getValue('active') == '1') {
-            secAdminUsers[u.user_name.toString()] = u.name.toString();
-        }
-    }
-
-    var direct = new GlideRecord('sys_user_has_role');
-    direct.addQuery('role.name', 'security_admin');
-    direct.addQuery('user.active', 'true');
-    direct.addQuery('state', 'active');
-    direct.query();
-    while (direct.next()) {
-        collectUser(direct.getValue('user'));
-    }
-
-    var groupRole = new GlideRecord('sys_group_has_role');
-    groupRole.addQuery('role.name', 'security_admin');
-    groupRole.query();
-    while (groupRole.next()) {
-        var member = new GlideRecord('sys_user_grmember');
-        member.addQuery('group', groupRole.getValue('group'));
-        member.addQuery('user.active', 'true');
-        member.query();
-        while (member.next()) {
-            collectUser(member.getValue('user'));
-        }
-    }
-
-    var secAdminUsernames = [];
-    for (var u in secAdminUsers) {
-        secAdminUsernames.push(u);
-    }
-
-    //gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
-
-    var highRiskTables = ['sys_acl', 'sys_security_acl', 'sys_user_has_role', 'sys_group_has_role'];
-    var aclChanges = [];
-
-    for (var i = 0; i < secAdminUsernames.length; i++) {
-        var uname = secAdminUsernames[i];
-        var audit = new GlideRecord('sys_audit');
-        audit.addQuery('user', uname);
-        audit.addQuery('tablename', 'IN', highRiskTables.join(','));
-        audit.addQuery('sys_created_on', '>', gs.daysAgo(30)); // Configurable lookback
-        audit.orderByDesc('sys_created_on');
-        audit.setLimit(100);
-        audit.query();
-        while (audit.next()) {
-
-			engine.finding.setCurrentSource(audit);
-			//engine.finding.setValue('finding_details','');
-			engine.finding.increment();
-
-
-            aclChanges.push({
-                timestamp: audit.sys_created_on.toString(),
-                user: uname,
-                display_name: secAdminUsers[uname],
-                table_modified: audit.tablename.toString(),
-                record_id: audit.documentkey.toString(),
-                field_changed: audit.fieldname.toString(),
-                old_value: audit.oldvalue.toString(),
-                new_value: audit.newvalue.toString()
-            });
-			
-        }
-    }
-
-    // gs.info('ACL modifications by security_admin users (last 30 days): ' + aclChanges.length);
-    // gs.info(JSON.stringify(aclChanges, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Review self-assigned admin roles
-
-**What:** Detects role assignment changes made by security_admin users in the last 30 days. Flags self-grants and grants of high-risk roles (admin, security_admin, impersonator) as the most direct indicators of privilege escalation.
-
-**Why:** Role grants are the most explicit form of privilege escalation. A security_admin granting themselves or others additional elevated roles bypasses intended approval workflows. NIST AC-6(5) and SOC 2 CC6.1 require that privileged role changes be authorized, logged, and reviewed for anomalous patterns.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    var secAdminUsers = {};
-
-    function collectUser(userSysId) {
-        if (!userSysId) return;
-        var u = new GlideRecord('sys_user');
-        if (u.get(userSysId) && u.getValue('active') == '1') {
-            secAdminUsers[u.user_name.toString()] = u.name.toString();
-        }
-    }
-
-    var direct = new GlideRecord('sys_user_has_role');
-    direct.addQuery('role.name', 'security_admin');
-    direct.addQuery('user.active', 'true');
-    direct.addQuery('state', 'active');
-    direct.query();
-    while (direct.next()) {
-        collectUser(direct.getValue('user'));
-    }
-
-    var groupRole = new GlideRecord('sys_group_has_role');
-    groupRole.addQuery('role.name', 'security_admin');
-    groupRole.query();
-    while (groupRole.next()) {
-        var member = new GlideRecord('sys_user_grmember');
-        member.addQuery('group', groupRole.getValue('group'));
-        member.addQuery('user.active', 'true');
-        member.query();
-        while (member.next()) {
-            collectUser(member.getValue('user'));
-        }
-    }
-
-    var secAdminUsernames = [];
-    for (var u in secAdminUsers) {
-        secAdminUsernames.push(u);
-    }
-
-    gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
-
-    var highRiskRoles = ['admin', 'security_admin', 'impersonator'];
-    var roleGrantTables = ['sys_user_has_role', 'sys_group_has_role'];
-    var roleGrants = [];
-
-    for (var i = 0; i < secAdminUsernames.length; i++) {
-        var uname = secAdminUsernames[i];
-        var audit = new GlideRecord('sys_audit');
-        audit.addQuery('user', uname);
-        audit.addQuery('tablename', 'IN', roleGrantTables.join(','));
-        audit.addQuery('sys_created_on', '>', gs.daysAgo(30)); // Configurable lookback
-        audit.orderByDesc('sys_created_on');
-        audit.setLimit(100);
-        audit.query();
-
-        while (audit.next()) {
-            var roleName = '';
-            var recipient = '';
-            var tableModified = audit.tablename.toString();
-
-            var roleRecord = new GlideRecord(tableModified);
-            if (roleRecord.get(audit.documentkey.toString())) {
-                roleName = roleRecord.role.name.toString();
-                recipient = tableModified === 'sys_user_has_role' ?
-                    roleRecord.user.user_name.toString() :
-                    roleRecord.group.name.toString();
-            }
-
-            var isSelfGrant = (recipient === uname);
-            var isHighRisk = false;
-            for (var j = 0; j < highRiskRoles.length; j++) {
-                if (roleName === highRiskRoles[j]) {
-                    isHighRisk = true;
-                    break;
-                }
-            }
-
-            roleGrants.push({
-                timestamp: audit.sys_created_on.toString(),
-                granted_by: uname,
-                granted_by_display: secAdminUsers[uname],
-                recipient: recipient,
-                role_granted: roleName,
-                table: tableModified,
-                field_changed: audit.fieldname.toString(),
-                old_value: audit.oldvalue.toString(),
-                new_value: audit.newvalue.toString(),
-                is_self_grant: isSelfGrant,
-                is_high_risk_role: isHighRisk
-            });
-        }
-    }
-
-    var highRiskGrants = [];
-    var selfGrants = [];
-    for (var k = 0; k < roleGrants.length; k++) {
-        if (roleGrants[k].is_self_grant) selfGrants.push(roleGrants[k]);
-        if (roleGrants[k].is_high_risk_role) highRiskGrants.push(roleGrants[k]);
-    }
-
-    gs.info('Total role grants by security_admin users (last 30 days): ' + roleGrants.length);
-    gs.info('High risk role grants (admin/security_admin/impersonator): ' + highRiskGrants.length);
-    gs.info('Self grants: ' + selfGrants.length);
-    gs.info(JSON.stringify(roleGrants, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Recent script changes by security_admin
-
-**What:** Detects modifications to server-side scripts (business rules, script includes, UI actions, web service operations, and processors) made by security_admin users in the last 30 days. Flags changes to active scripts as higher concern.
-
-**Why:** Server-side scripts execute with elevated privileges and represent an indirect but powerful path to platform compromise. A security_admin modifying a business rule can inject logic that runs on every transaction against a table. NIST SI-7 and CIS control 2.7 require integrity monitoring of executable code and configuration.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    var secAdminUsers = {};
-
-    function collectUser(userSysId) {
-        if (!userSysId) return;
-        var u = new GlideRecord('sys_user');
-        if (u.get(userSysId) && u.getValue('active') == '1') {
-            secAdminUsers[u.user_name.toString()] = u.name.toString();
-        }
-    }
-
-    var direct = new GlideRecord('sys_user_has_role');
-    direct.addQuery('role.name', 'security_admin');
-    direct.addQuery('user.active', 'true');
-    direct.addQuery('state', 'active');
-    direct.query();
-    while (direct.next()) {
-        collectUser(direct.getValue('user'));
-    }
-
-    var groupRole = new GlideRecord('sys_group_has_role');
-    groupRole.addQuery('role.name', 'security_admin');
-    groupRole.query();
-    while (groupRole.next()) {
-        var member = new GlideRecord('sys_user_grmember');
-        member.addQuery('group', groupRole.getValue('group'));
-        member.addQuery('user.active', 'true');
-        member.query();
-        while (member.next()) {
-            collectUser(member.getValue('user'));
-        }
-    }
-
-    var secAdminUsernames = [];
-    for (var u in secAdminUsers) {
-        secAdminUsernames.push(u);
-    }
-
-    gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
-
-    var scriptTables = [
-        'sys_script', // Business rules
-        'sys_script_include', // Script includes
-        'sys_ui_action', // UI actions
-        'sys_ws_operation', // Web service operations
-        'sys_processor' // Processors
-    ];
-
-    var scriptChanges = [];
-
-    for (var i = 0; i < secAdminUsernames.length; i++) {
-        var uname = secAdminUsernames[i];
-        var audit = new GlideRecord('sys_audit');
-        audit.addQuery('user', uname);
-        audit.addQuery('tablename', 'IN', scriptTables.join(','));
-        audit.addQuery('sys_created_on', '>', gs.daysAgo(30)); // Configurable lookback
-        audit.orderByDesc('sys_created_on');
-        audit.setLimit(100);
-        audit.query();
-
-        while (audit.next()) {
-            var tableModified = audit.tablename.toString();
-            var recordId = audit.documentkey.toString();
-            var scriptName = '';
-            var isActive = '';
-
-            var scriptRecord = new GlideRecord(tableModified);
-            if (scriptRecord.get(recordId)) {
-                scriptName = scriptRecord.name.toString();
-                isActive = scriptRecord.active.toString();
-            }
-
-			var scriptRecordSpecificChanges = {
-                timestamp: audit.sys_created_on.toString(),
-                changed_by: uname,
-                changed_by_display: secAdminUsers[uname],
-                table: tableModified,
-                script_name: scriptName,
-                is_active: isActive,
-                field_changed: audit.fieldname.toString(),
-                old_value: audit.oldvalue.toString().substring(0, 100),
-                new_value: audit.newvalue.toString().substring(0, 100)
-            };
-
-            scriptChanges.push(scriptRecordSpecificChanges);
-
-			engine.finding.setCurrentSource(scriptRecord);
-			engine.finding.setValue('finding_details',JSON.stringify(scriptRecordSpecificChanges,null,4));
-			engine.finding.increment();
-			
-        }
-    }
-
-    var activeScriptChanges = [];
-    var inactiveScriptChanges = [];
-    for (var k = 0; k < scriptChanges.length; k++) {
-        if (scriptChanges[k].is_active === 'true' || scriptChanges[k].is_active === '1') {
-            activeScriptChanges.push(scriptChanges[k]);
-        } else {
-            inactiveScriptChanges.push(scriptChanges[k]);
-        }
-    }
-
-    // gs.info('Total script changes by security_admin users (last 30 days): ' + scriptChanges.length);
-    // gs.info('Changes to active scripts: ' + activeScriptChanges.length);
-    // gs.info('Changes to inactive scripts: ' + inactiveScriptChanges.length);
-    // gs.info(JSON.stringify(scriptChanges, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Recent script changes by admin
-
-**What:** Detects modifications to server-side scripts (business rules, script includes, UI actions, web service operations, and processors) made by security_admin users in the last 30 days. Flags changes to active scripts as higher concern.
-
-**Why:** Server-side scripts execute with elevated privileges and represent an indirect but powerful path to platform compromise. A security_admin modifying a business rule can inject logic that runs on every transaction against a table. NIST SI-7 and CIS control 2.7 require integrity monitoring of executable code and configuration.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    var secAdminUsers = {};
-
-    function collectUser(userSysId) {
-        if (!userSysId) return;
-        var u = new GlideRecord('sys_user');
-        if (u.get(userSysId) && u.getValue('active') == '1') {
-            secAdminUsers[u.user_name.toString()] = u.name.toString();
-        }
-    }
-
-    var direct = new GlideRecord('sys_user_has_role');
-    direct.addQuery('role.name', 'admin');
-    direct.addQuery('user.active', 'true');
-    direct.addQuery('state', 'active');
-    direct.query();
-    while (direct.next()) {
-        collectUser(direct.getValue('user'));
-    }
-
-    var groupRole = new GlideRecord('sys_group_has_role');
-    groupRole.addQuery('role.name', 'admin');
-    groupRole.query();
-    while (groupRole.next()) {
-        var member = new GlideRecord('sys_user_grmember');
-        member.addQuery('group', groupRole.getValue('group'));
-        member.addQuery('user.active', 'true');
-        member.query();
-        while (member.next()) {
-            collectUser(member.getValue('user'));
-        }
-    }
-
-    var secAdminUsernames = [];
-    for (var u in secAdminUsers) {
-        secAdminUsernames.push(u);
-    }
-
-    //gs.info('admin population: ' + secAdminUsernames.length + ' users');
-
-    var scriptTables = [
-        'sys_script', // Business rules
-        'sys_script_include', // Script includes
-        'sys_ui_action', // UI actions
-        'sys_ws_operation', // Web service operations
-        'sys_processor' // Processors
-    ];
-
-    var scriptChanges = [];
-
-    for (var i = 0; i < secAdminUsernames.length; i++) {
-        var uname = secAdminUsernames[i];
-        var audit = new GlideRecord('sys_audit');
-        audit.addQuery('user', uname);
-        audit.addQuery('tablename', 'IN', scriptTables.join(','));
-        audit.addQuery('sys_created_on', '>', gs.daysAgo(30)); // Configurable lookback
-        audit.orderByDesc('sys_created_on');
-        audit.setLimit(100);
-        audit.query();
-
-        while (audit.next()) {
-            var tableModified = audit.tablename.toString();
-            var recordId = audit.documentkey.toString();
-            var scriptName = '';
-            var isActive = '';
-
-            var scriptRecord = new GlideRecord(tableModified);
-            if (scriptRecord.get(recordId)) {
-                scriptName = scriptRecord.name.toString();
-                isActive = scriptRecord.active.toString();
-            }
-
-			var scriptRecordSpecificChanges = {
-                timestamp: audit.sys_created_on.toString(),
-                changed_by: uname,
-                changed_by_display: secAdminUsers[uname],
-                table: tableModified,
-                script_name: scriptName,
-                is_active: isActive,
-                field_changed: audit.fieldname.toString(),
-                old_value: audit.oldvalue.toString().substring(0, 100),
-                new_value: audit.newvalue.toString().substring(0, 100)
-            };
-
-            scriptChanges.push(scriptRecordSpecificChanges);
-
-			engine.finding.setCurrentSource(scriptRecord);
-			engine.finding.setValue('finding_details',JSON.stringify(scriptRecordSpecificChanges,null,4));
-			engine.finding.increment();
-			
-        }
-    }
-
-    var activeScriptChanges = [];
-    var inactiveScriptChanges = [];
-    for (var k = 0; k < scriptChanges.length; k++) {
-        if (scriptChanges[k].is_active === 'true' || scriptChanges[k].is_active === '1') {
-            activeScriptChanges.push(scriptChanges[k]);
-        } else {
-            inactiveScriptChanges.push(scriptChanges[k]);
-        }
-    }
-
-    // gs.info('Total script changes by security_admin users (last 30 days): ' + scriptChanges.length);
-    // gs.info('Changes to active scripts: ' + activeScriptChanges.length);
-    // gs.info('Changes to inactive scripts: ' + inactiveScriptChanges.length);
-    // gs.info(JSON.stringify(scriptChanges, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Find changes to Encryption config tables
-
-**What:** Detects modifications to Platform Encryption resources (crypto modules, key maps, keys, key stores, certificates, and encryption contexts) made by security_admin users in the last 30 days. Flags deactivation events and changes to high-risk KMF tables separately.
-
-**Why:** Encryption key management is foundational to data protection. Unauthorized changes to encryption configuration can expose encrypted data at rest or render it unrecoverable. NIST SC-12 and SC-28 require that cryptographic key management activities be controlled and auditable.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    var secAdminUsers = {};
-
-    function collectUser(userSysId) {
-        if (!userSysId) return;
-        var u = new GlideRecord('sys_user');
-        if (u.get(userSysId) && u.getValue('active') == '1') {
-            secAdminUsers[u.user_name.toString()] = u.name.toString();
-        }
-    }
-
-    var direct = new GlideRecord('sys_user_has_role');
-    direct.addQuery('role.name', 'admin');
-    direct.addQuery('user.active', 'true');
-    direct.addQuery('state', 'active');
-    direct.query();
-    while (direct.next()) {
-        collectUser(direct.getValue('user'));
-    }
-
-    var groupRole = new GlideRecord('sys_group_has_role');
-    groupRole.addQuery('role.name', 'admin');
-    groupRole.query();
-    while (groupRole.next()) {
-        var member = new GlideRecord('sys_user_grmember');
-        member.addQuery('group', groupRole.getValue('group'));
-        member.addQuery('user.active', 'true');
-        member.query();
-        while (member.next()) {
-            collectUser(member.getValue('user'));
-        }
-    }
-
-    var secAdminUsernames = [];
-    for (var u in secAdminUsers) {
-        secAdminUsernames.push(u);
-    }
-
-    //gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
-
-    var encryptionTables = [
-        'sys_kmf_crypto_module', // Crypto modules
-        'sys_kmf_map', // Key maps (which fields are encrypted)
-        'sys_kmf_key', // Encryption keys
-        'sys_kmf_key_store', // Key stores
-        'sys_kmf_key_store_alias', // Key store aliases
-        'sys_kmf_crypto_spec', // Crypto specifications
-        'sys_kmf_key_lifecycle', // Key lifecycle policies
-        'sys_certificate', // Certificates
-        'sys_encryption_context' // Encryption contexts
-    ];
-
-    var highRiskTables = ['sys_kmf_map', 'sys_kmf_key', 'sys_kmf_crypto_module'];
-    var encryptionChanges = [];
-
-    for (var i = 0; i < secAdminUsernames.length; i++) {
-        var uname = secAdminUsernames[i];
-        var audit = new GlideRecord('sys_audit');
-        audit.addQuery('user', uname);
-        audit.addQuery('tablename', 'IN', encryptionTables.join(','));
-        audit.addQuery('sys_created_on', '>', gs.daysAgo(30)); // Configurable lookback
-        audit.orderByDesc('sys_created_on');
-        audit.setLimit(100);
-        audit.query();
-
-        while (audit.next()) {
-            var tableModified = audit.tablename.toString();
-            var recordId = audit.documentkey.toString();
-            var recordName = '';
-
-            var encRecord = new GlideRecord(tableModified);
-            if (encRecord.get(recordId)) {
-                recordName = encRecord.name.toString();
-            }
-
-            var fieldChanged = audit.fieldname.toString();
-            var oldValue = audit.oldvalue.toString();
-            var newValue = audit.newvalue.toString();
-            var isDeactivation = (fieldChanged === 'active' && oldValue === '1' && newValue === '0');
-
-            var isHighRisk = false;
-            for (var j = 0; j < highRiskTables.length; j++) {
-                if (tableModified === highRiskTables[j]) {
-                    isHighRisk = true;
-                    break;
-                }
-            }
-
-
-
-			var encryptionAuditObj = {
-                timestamp: audit.sys_created_on.toString(),
-                changed_by: uname,
-                changed_by_display: secAdminUsers[uname],
-                table: tableModified,
-                record_name: recordName,
-                field_changed: fieldChanged,
-                old_value: oldValue,
-                new_value: newValue,
-                is_deactivation: isDeactivation,
-                is_high_risk_table: isHighRisk
-            };
-
-            encryptionChanges.push(encryptionAuditObj);
-
-			engine.finding.setCurrentSource(encRecord);
-			engine.finding.setValue('finding_details',JSON.stringify(encryptionAuditObj,null,4));
-			engine.finding.increment();
-
-        }
-    }
-
-    var deactivations = [];
-    var highRiskChanges = [];
-    var otherChanges = [];
-
-    for (var k = 0; k < encryptionChanges.length; k++) {
-        if (encryptionChanges[k].is_deactivation) {
-            deactivations.push(encryptionChanges[k]);
-        } else if (encryptionChanges[k].is_high_risk_table) {
-            highRiskChanges.push(encryptionChanges[k]);
-        } else {
-            otherChanges.push(encryptionChanges[k]);
-        }
-    }
-
-    gs.info('Total encryption changes by security_admin users (last 30 days): ' + encryptionChanges.length);
-    gs.info('Deactivation events: ' + deactivations.length);
-    gs.info('High risk table changes (sys_kmf_map, sys_kmf_key, sys_kmf_crypto_module): ' + highRiskChanges.length);
-    gs.info('Other encryption changes: ' + otherChanges.length);
-    gs.info(JSON.stringify(encryptionChanges, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Integration users with admin role
-
-**What:** Finds all active users flagged as web-service-access-only (integration/API accounts) that have been assigned roles containing "admin" in the name. These are non-interactive accounts with overly broad privileges.
-
-**Why:** Integration accounts should follow the principle of least privilege more strictly than human accounts because they typically operate unattended and are harder to monitor for misuse. CIS and NIST AC-6(10) recommend that non-interactive service accounts be restricted to the minimum permissions required for their function.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    // Find integration users with overly broad access
-    var integrationUser = new GlideRecord('sys_user');
-    integrationUser.addQuery('web_service_access_only', 'true');
-    integrationUser.addQuery('active', 'true');
-    integrationUser.query();
-
-    var integrationUsers = [];
-    while (integrationUser.next()) {
-        var roles = [];
-        var userRoleAssignment = new GlideRecord('sys_user_has_role');
-        userRoleAssignment.addQuery('user', integrationUser.getUniqueValue());
-        userRoleAssignment.query();
-
-        while (userRoleAssignment.next()) {
-            roles.push(userRoleAssignment.role.name.toString());
-        }
-
-        // Flag if integration user has any role containing "admin"
-        var hasAdminRole = false;
-        for (var i = 0; i < roles.length; i++) {
-            if (roles[i].indexOf('admin') > -1) {
-                hasAdminRole = true;
-                break;
-            }
-        }
-
-        if (hasAdminRole) {
-
-			engine.finding.setCurrentSource(integrationUser);
-			engine.finding.increment();
-
-            integrationUsers.push({
-                user: integrationUser.user_name.toString(),
-                name: integrationUser.name.toString(),
-                roles: roles,
-                last_login: integrationUser.last_login_time.toString()
-            });
-        }
-    }
-
-    //gs.warn('Integration users with admin roles: ' + JSON.stringify(integrationUsers, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Review active OAuth IDs
-
-**What:** Audits all active OAuth application registrations, capturing client IDs, redirect URLs, and access/refresh token lifespans. Identifies applications that may have excessively long token lifetimes.
-
-**Why:** OAuth tokens are bearer credentials - anyone who possesses a valid token can use it. Excessively long token lifespans increase the window of opportunity for token theft and replay. NIST IA-5(13) and OAuth 2.0 Security Best Current Practice (RFC 9700) recommend short-lived access tokens and bounded refresh token lifetimes.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-    // Audit active OAuth applications and their token lifespans
-    var oauthEntity = new GlideRecord('oauth_entity');
-    oauthEntity.addQuery('active', 'true');
-    oauthEntity.query();
-
-    var oauthApps = [];
-    while (oauthEntity.next()) {
-
-		engine.finding.setCurrentSource(oauthEntity);
-		engine.finding.increment();
-
-        oauthApps.push({
-            name: oauthEntity.name.toString(),
-            client_id: oauthEntity.client_id.toString(),
-            redirect_url: oauthEntity.redirect_url.toString(),
-            access_token_lifespan: oauthEntity.access_token_lifespan.toString(),
-            refresh_token_lifespan: oauthEntity.refresh_token_lifespan.toString()
-        });
-    }
-
-    //gs.info('Active OAuth applications: ' + JSON.stringify(oauthApps, null, 2));
-
-})(engine);
-```
-
-</details>
-
----
-
-### Find BRs with risky patterns
-
-**What:** Scans all active business rules for dangerous script patterns including gs.setProperty, direct manipulation of sys_user or sys_user_has_role, abort action overrides, role assignments, and session data injection. Reports matched patterns per rule for targeted review.
-
-**Why:** Business rules execute server-side with system-level privileges and fire automatically on database operations. A malicious or poorly written business rule can modify user records, grant roles, or alter system properties on every insert/update. NIST SI-7 requires integrity verification of operational code, and CIS recommends auditing scripts that run with elevated privileges.
-
-<details>
-<summary>View Script</summary>
-
-```javascript
-(function(engine) {
-
-
-    //var sw = new GlideStopWatch();
-
-    var businessRule = new GlideRecord('sys_script');
-    businessRule.addQuery('active', 'true');
-    businessRule.addQuery('when', 'IN', 'before,after,async,display');
-    businessRule.query();
-
-    //gs.info('Scanning ' + businessRule.getRowCount() + ' active business rules...\n');
-
-    var systemRules = [];
-    var dangerousPatterns = [
-        'gs.setProperty',
-        'GlideRecord(\'sys_user\')',
-        'GlideRecord("sys_user")',
-        'current.setAbortAction(false)',
-        'gs.getUser().setRole',
-        'gs.addRole',
-        'gs.nil(',
-        'GlideRecord(\'sys_user_has_role\')',
-        'GlideRecord("sys_user_has_role")',
-        'gs.getSession().putClientData',
-        'answer = true;'
-    ];
-
-    while (businessRule.next()) {
-        var script = businessRule.script.toString();
-        var matchedPatterns = [];
-
-        for (var i = 0; i < dangerousPatterns.length; i++) {
-            if (script.indexOf(dangerousPatterns[i]) > -1) {
-                matchedPatterns.push(dangerousPatterns[i]);
-            }
-        }
-
-        if (matchedPatterns.length > 0) {
-
-			
-			var brMatchedPatternObj = {
-                name: businessRule.name.toString(),
-                table: businessRule.collection.toString(),
-                when: businessRule.when.toString(),
-                active: businessRule.active.toString(),
-                sys_id: businessRule.sys_id.toString(),
-                matched_patterns: matchedPatterns,
-                pattern_count: matchedPatterns.length
-            };
-
-            systemRules.push(brMatchedPatternObj);
-
-			engine.finding.setCurrentSource(businessRule);
-			engine.finding.setValue('finding_details',JSON.stringify(brMatchedPatternObj));
-			engine.finding.increment();
-
-        }
-    }
-
-    //gs.info('Scan completed in: ' + sw.elapsed() + 'ms');
-    //gs.warn('\nFound ' + systemRules.length + ' business rules with potential privilege escalation patterns\n');
-
-    // for (var j = 0; j < systemRules.length; j++) {
-    //     var rule = systemRules[j];
-    //     gs.warn('---');
-    //     gs.warn('Business Rule: ' + rule.name);
-    //     gs.warn('Table: ' + rule.table);
-    //     gs.warn('When: ' + rule.when);
-    //     gs.warn('Patterns found: ' + rule.matched_patterns.join(', '));
-    //     gs.warn('Sys ID: ' + rule.sys_id);
-    // }
-
-    //gs.info('\n=== JSON Export ===');
-    //gs.info(JSON.stringify(systemRules, null, 2));
-
-    return systemRules;
-
-
-
 
 })(engine);
 ```
@@ -2064,30 +1625,218 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ```javascript
 (function(engine) {
-
     // Only runs if domain separation is enabled on the instance
-
 	var userRecord = new GlideRecord('sys_user');
 	userRecord.addQuery('active', 'true');
 	userRecord.addNullQuery('sys_domain'); // Users without domain assignment
 	userRecord.query();
-
 	var orphanedUsers = [];
 	while (userRecord.next()) {
-
 		engine.finding.setCurrentSource(userRecord);
 		engine.finding.setValue('finding_details','User is active and has no domain assignment.');
 		engine.finding.increment();
-
 		orphanedUsers.push({
 			user: userRecord.user_name.toString(),
 			name: userRecord.name.toString()
 		});
 	}
-
 	//gs.warn('Users without domain assignment: ' + JSON.stringify(orphanedUsers, null, 2));
    
+})(engine);
+```
 
+</details>
+
+---
+
+## Level Next
+
+### Scheduled jobs running as admin
+
+**What:** Identifies active scheduled script executions (sysauto_script) configured to run as a user with the admin role. These jobs execute on a schedule with the full privileges of the run-as user.
+
+**Why:** Scheduled jobs running as admin operate with unrestricted access and no interactive session monitoring. If the run-as account is compromised or the job script is modified, it becomes a persistent backdoor. NIST AC-6(1) and CIS recommend that automated processes run with the minimum privileges required.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    // Find scheduled jobs configured to run as admin users
+    var scheduledJob = new GlideRecord('sysauto_script');
+    scheduledJob.addQuery('active', 'true');
+    scheduledJob.query();
+    var adminJobs = [];
+    while (scheduledJob.next()) {
+        var runAs = scheduledJob.run_as.toString();
+        var runAsUser = new GlideRecord('sys_user');
+        if (runAs && runAsUser.get(runAs)) {
+            var adminRoleCheck = new GlideRecord('sys_user_has_role');
+            adminRoleCheck.addQuery('user', runAs);
+            adminRoleCheck.addQuery('role.name', 'admin');
+            adminRoleCheck.addQuery('state', 'active');
+            adminRoleCheck.query();
+            if (adminRoleCheck.hasNext()) {
+                engine.finding.setCurrentSource(scheduledJob);
+                engine.finding.increment();
+                adminJobs.push({
+                    name: scheduledJob.name.toString(),
+                    run_as: runAsUser.name.toString(),
+                    run_dayofweek: scheduledJob.run_dayofweek.toString(),
+                    run_time: scheduledJob.run_time.toString()
+                });
+            }
+        }
+    }
+    //gs.info('Scheduled jobs running as admin: ' + JSON.stringify(adminJobs, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Review active OAuth IDs
+
+**What:** Audits all active OAuth application registrations, capturing client IDs, redirect URLs, and access/refresh token lifespans. Identifies applications that may have excessively long token lifetimes.
+
+**Why:** OAuth tokens are bearer credentials - anyone who possesses a valid token can use it. Excessively long token lifespans increase the window of opportunity for token theft and replay. NIST IA-5(13) and OAuth 2.0 Security Best Current Practice (RFC 9700) recommend short-lived access tokens and bounded refresh token lifetimes.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+    // Audit active OAuth applications and their token lifespans
+    var oauthEntity = new GlideRecord('oauth_entity');
+    oauthEntity.addQuery('active', 'true');
+    oauthEntity.query();
+    var oauthApps = [];
+    while (oauthEntity.next()) {
+		engine.finding.setCurrentSource(oauthEntity);
+		engine.finding.increment();
+        oauthApps.push({
+            name: oauthEntity.name.toString(),
+            client_id: oauthEntity.client_id.toString(),
+            redirect_url: oauthEntity.redirect_url.toString(),
+            access_token_lifespan: oauthEntity.access_token_lifespan.toString(),
+            refresh_token_lifespan: oauthEntity.refresh_token_lifespan.toString()
+        });
+    }
+    //gs.info('Active OAuth applications: ' + JSON.stringify(oauthApps, null, 2));
+})(engine);
+```
+
+</details>
+
+---
+
+### Find BRs with risky patterns
+
+**What:** Scans all active business rules for dangerous script patterns including gs.setProperty, direct manipulation of sys_user or sys_user_has_role, abort action overrides, role assignments, and session data injection. Reports matched patterns per rule for targeted review.
+
+**Why:** Business rules execute server-side with system-level privileges and fire automatically on database operations. A malicious or poorly written business rule can modify user records, grant roles, or alter system properties on every insert/update. NIST SI-7 requires integrity verification of operational code, and CIS recommends auditing scripts that run with elevated privileges.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+
+    //var sw = new GlideStopWatch();
+    var businessRule = new GlideRecord('sys_script');
+    businessRule.addQuery('active', 'true');
+    businessRule.addQuery('when', 'IN', 'before,after,async,display');
+    businessRule.query();
+    //gs.info('Scanning ' + businessRule.getRowCount() + ' active business rules...\n');
+    var systemRules = [];
+    var dangerousPatterns = [
+        'gs.setProperty',
+        'GlideRecord(\'sys_user\')',
+        'GlideRecord("sys_user")',
+        'current.setAbortAction(false)',
+        'gs.getUser().setRole',
+        'gs.addRole',
+        'gs.nil(',
+        'GlideRecord(\'sys_user_has_role\')',
+        'GlideRecord("sys_user_has_role")',
+        'gs.getSession().putClientData',
+        'answer = true;'
+    ];
+    while (businessRule.next()) {
+        var script = businessRule.script.toString();
+        var matchedPatterns = [];
+        for (var i = 0; i < dangerousPatterns.length; i++) {
+            if (script.indexOf(dangerousPatterns[i]) > -1) {
+                matchedPatterns.push(dangerousPatterns[i]);
+            }
+        }
+        if (matchedPatterns.length > 0) {
+			
+			var brMatchedPatternObj = {
+                name: businessRule.name.toString(),
+                table: businessRule.collection.toString(),
+                when: businessRule.when.toString(),
+                active: businessRule.active.toString(),
+                sys_id: businessRule.sys_id.toString(),
+                matched_patterns: matchedPatterns,
+                pattern_count: matchedPatterns.length
+            };
+            systemRules.push(brMatchedPatternObj);
+			engine.finding.setCurrentSource(businessRule);
+			engine.finding.setValue('finding_details',JSON.stringify(brMatchedPatternObj));
+			engine.finding.increment();
+        }
+    }
+    //gs.info('Scan completed in: ' + sw.elapsed() + 'ms');
+    //gs.warn('\nFound ' + systemRules.length + ' business rules with potential privilege escalation patterns\n');
+    // for (var j = 0; j < systemRules.length; j++) {
+    //     var rule = systemRules[j];
+    //     gs.warn('---');
+    //     gs.warn('Business Rule: ' + rule.name);
+    //     gs.warn('Table: ' + rule.table);
+    //     gs.warn('When: ' + rule.when);
+    //     gs.warn('Patterns found: ' + rule.matched_patterns.join(', '));
+    //     gs.warn('Sys ID: ' + rule.sys_id);
+    // }
+    //gs.info('\n=== JSON Export ===');
+    //gs.info(JSON.stringify(systemRules, null, 2));
+    return systemRules;
+
+
+})(engine);
+```
+
+</details>
+
+---
+
+### UI Policies Bypassing Mandatory Fields
+
+**What:** Identifies active UI policies that contain actions setting fields to non-mandatory. These policies can override mandatory field requirements configured at the dictionary or form level, allowing users to submit records with missing data.
+
+**Why:** Mandatory field enforcement is a key data integrity control. UI policies that silently remove mandatory constraints can lead to incomplete records, broken workflows, and compliance gaps. CIS and NIST SI-10 require that input validation controls be consistently enforced and not overridden without authorization.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function (engine) {
+	var uiPolicy = new GlideRecord('sys_ui_policy');
+	uiPolicy.addQuery('active', 'true');
+	uiPolicy.query();
+	while (uiPolicy.next()) {
+		var actions = new GlideRecord('sys_ui_policy_action');
+		actions.addQuery('ui_policy', uiPolicy.getUniqueValue());
+		actions.addQuery('mandatory', 'false');
+		actions.query();
+		if (actions.hasNext()) {
+			gs.info('UI Policy bypassing mandatory fields: ' + uiPolicy.short_description.toString());
+			engine.finding.setCurrentSource(actions);
+			engine.finding.setValue('finding_details','Possible finding. Needs review.');
+			engine.finding.increment();
+		}
+	}
 })(engine);
 ```
 
@@ -2106,7 +1855,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ```javascript
 (function (engine) {
-
 	// Check authentication and session security properties
 	var policies = [
 		'glide.ui.security.allow_guest',          // Guest access enabled?
@@ -2116,7 +1864,6 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 	];
 		//'session.timeout',                        // Session timeout
 
-
 	var policySettings = {};
 	for (var i = 0; i < policies.length; i++) {
 		
@@ -2124,29 +1871,20 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 		
 		var policyValue = gs.getProperty(policies[i]);
 		policySettings[policies[i]] = policyValue;
-
 		//Get Record
 		var propRec = new GlideRecord('sys_properties');
 		propRec.addQuery('name',policies[i]);
 		propRec.query();
 		if(propRec.next()){
-
 			engine.finding.setCurrentSource(propRec);
 			engine.finding.setValue('finding_details','Property currently configured as:'+policyValue);
 			engine.finding.increment();
-
 		}else{
-
 			gs.warn('Instance Scan Check cant find prop:'+policies[i]);
-
 		}
 
-
-
 	}
-
 	//gs.info('Security policy settings: ' + JSON.stringify(policySettings, null, 2));
-
 })(engine);
 ```
 
@@ -2154,55 +1892,54 @@ Source files are available in [`scans/current/`](scans/current/) (`.js` for scri
 
 ---
 
-### Scheduled jobs running as admin
+### Admin Users Without MFA
 
-**What:** Identifies active scheduled script executions (sysauto_script) configured to run as a user with the admin role. These jobs execute on a schedule with the full privileges of the run-as user.
+**What:** Identifies active users with admin or security_admin roles who do not have an active MFA device enrolled in ServiceNow's native MFA system (sys_user_mfa_device).
 
-**Why:** Scheduled jobs running as admin operate with unrestricted access and no interactive session monitoring. If the run-as account is compromised or the job script is modified, it becomes a persistent backdoor. NIST AC-6(1) and CIS recommend that automated processes run with the minimum privileges required.
+**Why:** Privileged accounts without MFA are the highest-value targets for credential-based attacks. NIST IA-2(1), PCI DSS 8.4, and virtually every modern compliance framework mandate multi-factor authentication for administrative access. A single compromised admin password without MFA can lead to full instance takeover.
 
 <details>
 <summary>View Script</summary>
 
 ```javascript
-(function(engine) {
+(function (engine) {
+	// Find privileged users without MFA enrolled
+	var privilegedUserIds = {};
+	var adminRoleQuery = new GlideRecord('sys_user_has_role');
+	adminRoleQuery.addQuery('role.name', 'IN', 'admin,security_admin');
+	adminRoleQuery.addQuery('user.active', 'true');
+	adminRoleQuery.addQuery('state', 'active');
+	adminRoleQuery.query();
+	while (adminRoleQuery.next()) {
+		privilegedUserIds[adminRoleQuery.getValue('user')] = true;
+	}
+	var noMFAUsers = [];
+	for (var userId in privilegedUserIds) {
+		var userRecord = new GlideRecord('sys_user');
+		if (userRecord.get(userId)) {
+			var mfaDevice = new GlideRecord('sys_user_multi_factor_setup');
+			mfaDevice.addQuery('user', userId);
+			mfaDevice.addQuery('active', 'true');
+			mfaDevice.query();
+			if (!mfaDevice.hasNext()) {
+				engine.finding.setCurrentSource(userRecord);
+				//engine.finding.setValue('finding_details','Found with DIRECT role assignment');
+				engine.finding.increment();
 
-    // Find scheduled jobs configured to run as admin users
-    var scheduledJob = new GlideRecord('sysauto_script');
-    scheduledJob.addQuery('active', 'true');
-    scheduledJob.query();
-
-    var adminJobs = [];
-    while (scheduledJob.next()) {
-        var runAs = scheduledJob.run_as.toString();
-        var runAsUser = new GlideRecord('sys_user');
-
-        if (runAs && runAsUser.get(runAs)) {
-            var adminRoleCheck = new GlideRecord('sys_user_has_role');
-            adminRoleCheck.addQuery('user', runAs);
-            adminRoleCheck.addQuery('role.name', 'admin');
-            adminRoleCheck.addQuery('state', 'active');
-            adminRoleCheck.query();
-            if (adminRoleCheck.hasNext()) {
-
-                engine.finding.setCurrentSource(scheduledJob);
-                engine.finding.increment();
-
-                adminJobs.push({
-                    name: scheduledJob.name.toString(),
-                    run_as: runAsUser.name.toString(),
-                    run_dayofweek: scheduledJob.run_dayofweek.toString(),
-                    run_time: scheduledJob.run_time.toString()
-                });
-            }
-        }
-    }
-
-    //gs.info('Scheduled jobs running as admin: ' + JSON.stringify(adminJobs, null, 2));
-
+				noMFAUsers.push({
+					user: userRecord.user_name.toString(),
+					name: userRecord.name.toString(),
+					email: userRecord.email.toString()
+				});
+			}
+		}
+	}
+	//gs.warn('Admin users without MFA: ' + JSON.stringify(noMFAUsers, null, 2));
 })(engine);
 ```
 
 </details>
+
 
 ---
 

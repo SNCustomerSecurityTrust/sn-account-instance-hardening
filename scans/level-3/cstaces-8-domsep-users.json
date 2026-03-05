@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Checks whether domain separation is enabled and, if so, identifies active users without a domain assignment. These \"orphaned\" users may have unintended cross-domain visibility depending on the instance's domain separation configuration.\nWhy: Domain separation is a critical multi-tenancy control in ServiceNow. Users without explicit domain assignment can potentially access data across all domains, violating data isolation requirements. NIST AC-4 and SOC 2 CC6.6 require that information flow between security domains be controlled.",
+  "documentation_url": "",
+  "finding_type": "scan_finding",
+  "name": "cstaces-8 domsep users",
+  "priority": 4,
+  "resolution_details": "",
+  "run_condition": "gs.getProperty('glide.sys.domain_separation.enabled') == 'true'",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Domain Separation users without domain",
+  "sys_id": "8fafb51e2f97f2140fe9f74fafa4e378",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level 3"
+}
