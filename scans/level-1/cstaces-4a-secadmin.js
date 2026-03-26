@@ -1,5 +1,7 @@
 (function(engine) {
+
     var secAdmins = {};
+
     function addUser(userSysId, source) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -24,17 +26,22 @@
             }
         }
     }
+
     var direct = new GlideRecord('sys_user_has_role');
     direct.addQuery('role.name', 'security_admin');
     direct.addQuery('user.active', 'true');
     direct.addQuery('state', 'active');
     direct.query();
     while (direct.next()) {
+
 		var userRec = direct.user.getRefRecord();
 		engine.finding.setCurrentSource(userRec);
+		engine.finding.setValue('finding_details', 'User found with DIRECT security_admin role assignment');
 		engine.finding.increment();
+
         addUser(direct.getValue('user'), 'direct:security_admin');
     }
+
     var groupRole = new GlideRecord('sys_group_has_role');
     groupRole.addQuery('role.name', 'security_admin');
     groupRole.query();
@@ -45,12 +52,16 @@
         member.addQuery('user.active', 'true');
         member.query();
         while (member.next()) {
+
 			var userRec2 = groupRole.user.getRefRecord();
 			engine.finding.setCurrentSource(userRec2);
+			engine.finding.setValue('finding_details', 'Found with NESTED security_admin role via:'+groupName);
 			engine.finding.increment();
+
             addUser(member.getValue('user'), 'group:' + groupName);
         }
     }
+
     var results = [];
     for (var uname in secAdmins) {
         var entry = secAdmins[uname];
@@ -64,6 +75,7 @@
         entry.has_admin = adminCheck.next() ? true : false;
         results.push(entry);
     }
+
     var withAdmin = results.filter(function(u) {
         return u.has_admin;
     });
@@ -73,9 +85,11 @@
     var serviceAccounts = results.filter(function(u) {
         return u.is_service_account;
     });
+
     // gs.info('Total users with security_admin: ' + results.length);
     // gs.info('Also have admin (compounding privilege): ' + withAdmin.length);
     // gs.info('security_admin without admin: ' + withoutAdmin.length);
     // gs.info('Potential service accounts: ' + serviceAccounts.length);
     // gs.info(JSON.stringify(results, null, 2));
+
 })(engine);

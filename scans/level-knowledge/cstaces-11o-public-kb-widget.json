@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies Service Portal widgets with KB-related names where the public field is set to true, allowing unauthenticated access. AppOmni research showed that attackers can access misconfigured KBs through public widgets, including brute-forcing incremental KB article numbers (KB0000001, KB0000002, etc.) using the widget server-side API without authentication.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0959663",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11o public-kb-widget",
+  "priority": 4,
+  "resolution_details": "Navigate to sp_widget.list and set the public field to false on any KB-related widgets. If public access is intentionally required for specific widgets, ensure that all referenced knowledge bases have proper user criteria and that the widget code enforces access checks.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Service Portal KB widgets must not have the public flag enabled, which allows un",
+  "sys_id": "b5dfccda2fa7fa100fe9f74fafa4e34b",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

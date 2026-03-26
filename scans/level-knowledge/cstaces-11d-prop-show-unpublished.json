@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Checks that glide.knowman.show_unpublished is not set to true. When enabled, articles in Draft, Review, or other non-Published workflow states are visible in the Knowledge portal and search results. Unpublished articles may contain sensitive information that has not been reviewed or approved, bypassing the editorial and approval workflow.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0685171",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11d prop-show-unpublished",
+  "priority": 4,
+  "resolution_details": "Set glide.knowman.show_unpublished to false in sys_properties.list. Verify that draft and review-state articles no longer appear in portal search results or Knowledge homepage widgets for non-knowledge-manager roles.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "glide.knowman.show_unpublished must not be true to prevent draft and review-stat",
+  "sys_id": "d1bfc89a2fa7fa100fe9f74fafa4e3c5",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

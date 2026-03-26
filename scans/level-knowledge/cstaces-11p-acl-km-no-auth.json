@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Checks whether the sn_km_api Scripted REST Service requires authentication. The /api/sn_km_api/ API is public by default and does not require authentication. Any knowledge base that is publicly accessible becomes available for programmatic enumeration and download via this API without credentials. For version 1.0.1 and later, the API can be configured to require authentication.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0959663",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11p acl-km-no-auth",
+  "priority": 4,
+  "resolution_details": "Navigate to the sn_km_api Scripted REST Service record (sys_ws_definition.list, filter by name=sn_km_api) and check the Requires Authentication checkbox. Test that unauthenticated API calls to /api/sn_km_api/ now return a 401 response.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "The sn_km_api Knowledge Management REST API must require authentication to preve",
+  "sys_id": "0e3e40122fa7fa100fe9f74fafa4e3af",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

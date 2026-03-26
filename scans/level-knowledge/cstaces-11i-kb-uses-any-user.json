@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies knowledge bases where the Can Read user criteria includes the built-in Any User or Any user for kb user criteria records. These built-in records match ALL users including unauthenticated and guest users. Administrators commonly mistake them for all authenticated employees when they actually permit unauthenticated access. This was one of the three root cause scenarios identified by AppOmni for KB data exposures.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0550924",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11i kb-uses-any-user",
+  "priority": 4,
+  "resolution_details": "Replace the Any User or Any user for kb criteria with a more restrictive user criteria that targets only authenticated employees or specific groups. Create a new user criteria based on roles, groups, or departments and apply it as the Can Read criteria.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Knowledge bases must not use the built-in Any User or Any user for kb criteria i",
+  "sys_id": "f0fe88162fa7fa100fe9f74fafa4e381",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

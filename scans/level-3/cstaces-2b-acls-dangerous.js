@@ -1,5 +1,6 @@
 (function (engine) {
 
+
     var patterns = {
         UNCONDITIONAL_GRANT: [
             'answer = true',
@@ -27,36 +28,46 @@
             'hardcoded'
         ]
     };
+
     var concernOrder = ['UNCONDITIONAL_GRANT', 'BYPASS_PATTERN', 'DYNAMIC_BEHAVIOR', 'INCOMPLETE_LOGIC'];
     var suspiciousACLs = {};
+
     var aclRecord = new GlideRecord('sys_security_acl');
     aclRecord.addQuery('active', 'true');
     aclRecord.addNotNullQuery('script');
     aclRecord.query();
+
     while (aclRecord.next()) {
         var script = aclRecord.script.toString();
         var scriptLower = script.toLowerCase().replace(/\s+/g, ' ');
         var sysId = aclRecord.sys_id.toString();
+
         var matchedPatterns = [];
         var highestConcern = null;
+
         for (var category in patterns) {
             var patternList = patterns[category];
             for (var i = 0; i < patternList.length; i++) {
                 if (scriptLower.indexOf(patternList[i]) > -1) {
+
                     matchedPatterns.push({
                         pattern: patternList[i],
                         category: category
                     });
+
                     if (highestConcern === null ||
                         concernOrder.indexOf(category) < concernOrder.indexOf(highestConcern)) {
                         highestConcern = category;
                     }
+
 					engine.finding.setCurrentSource(aclRecord);
-					engine.finding.setValue('finding_details', JSON.stringify(matchedPatterns));
+					engine.finding.setValue('finding_details', 'Pattern:'+patternList[i]+' Category:'+category);
 					engine.finding.increment();
+
                 }
             }
         }
+
         if (matchedPatterns.length > 0) {
             suspiciousACLs[sysId] = {
                 sys_id: sysId,
@@ -72,6 +83,7 @@
             };
         }
     }
+
     var results = [];
     for (var id in suspiciousACLs) {
         results.push(suspiciousACLs[id]);
@@ -79,6 +91,7 @@
     results.sort(function(a, b) {
         return concernOrder.indexOf(a.highest_concern) - concernOrder.indexOf(b.highest_concern);
     });
+
     // gs.info('=== ACL DANGEROUS SCRIPT SCAN ===');
     // gs.info('Total findings: ' + results.length);
     // gs.info('Unconditional grants: ' + results.filter(function(a) { return a.highest_concern === 'UNCONDITIONAL_GRANT'; }).length);
@@ -86,5 +99,7 @@
     // gs.info('Dynamic behavior: ' + results.filter(function(a) { return a.highest_concern === 'DYNAMIC_BEHAVIOR'; }).length);
     // gs.info('Incomplete logic: ' + results.filter(function(a) { return a.highest_concern === 'INCOMPLETE_LOGIC'; }).length);
     // gs.info(JSON.stringify(results, null, 2));
+
+
 
 })(engine);

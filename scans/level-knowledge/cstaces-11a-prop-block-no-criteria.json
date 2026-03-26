@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Checks that the system property glide.knowman.block_access_with_no_user_criteria exists and is set to true. When false (the legacy default on pre-Orlando instances), any knowledge base that lacks Can Read or Can Contribute user criteria is accessible to all users, including unauthenticated guests. AppOmni research found approximately 45% of tested enterprise instances were leaking KB data due to this and related misconfigurations. This is the single most important KB security property.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0553863",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11a prop-block-no-criteria",
+  "priority": 4,
+  "resolution_details": "Navigate to sys_properties.list and set glide.knowman.block_access_with_no_user_criteria to true. If the property does not exist, create it as a true/false property with value true. Test that unauthenticated users can no longer access KBs without explicit user criteria.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "glide.knowman.block_access_with_no_user_criteria must be set to true to block un",
+  "sys_id": "b08f4c5a2fa7fa100fe9f74fafa4e3a3",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

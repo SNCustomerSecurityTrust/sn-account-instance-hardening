@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies published articles on the kb_knowledge table where the roles field contains the public role. While the Mark Public action adds the public role, this does little to make the article actually accessible without authentication. However, it creates confusion about intended access levels and may interact unexpectedly with glide.knowman.search.apply_role_based_security. The presence of the public role should be audited to confirm it was intentional.",
+  "documentation_url": "https://docs.servicenow.com/bundle/latest/page/product/knowledge-management/reference/r_KnowledgeProperties.html",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11t kba-public-role",
+  "priority": 4,
+  "resolution_details": "Review each flagged article with the knowledge owner to confirm the public role was intentionally applied. If not, remove the public role from the article roles field. Document a policy for when and how the Mark Public action should be used.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Articles with the public role in the roles field should be reviewed to confirm i",
+  "sys_id": "471f40d62fa7fa100fe9f74fafa4e33e",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

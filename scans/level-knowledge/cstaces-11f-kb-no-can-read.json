@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies active knowledge bases with no Can Read user criteria configured. Without explicit read criteria, access depends entirely on the glide.knowman.block_access_with_no_user_criteria system property. If that property is false, these KBs are accessible to everyone including unauthenticated guests. Every KB should have explicit Can Read criteria as a defense-in-depth measure.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0689656",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11f kb-no-can-read",
+  "priority": 4,
+  "resolution_details": "Add appropriate Can Read user criteria to the flagged knowledge base. At minimum, create a user criteria that limits read access to authenticated employees. Navigate to the KB record, then the User Criteria tab, and add or create Can Read criteria.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Active knowledge bases must have at least one Can Read user criteria to explicit",
+  "sys_id": "18ce8cd22fa7fa100fe9f74fafa4e3e2",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

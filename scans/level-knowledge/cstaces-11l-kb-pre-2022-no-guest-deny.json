@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies knowledge bases created before mid-2022 (when the Guest User Business Rule was introduced) that do not have the Guest user in any Cannot Read criteria. These are the highest-risk KBs for unintended public exposure since the automatic Guest denial protection was not applied retroactively. The Business Rule only protects newly created KBs.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0550924",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11l kb-pre-2022-no-guest-deny",
+  "priority": 4,
+  "resolution_details": "Add the Guest user to a Cannot Read user criteria on each flagged knowledge base. Prioritize KBs containing sensitive, internal, or HR content. This is a one-time remediation for legacy KBs that predated the automatic Guest denial Business Rule.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Knowledge bases created before mid-2022 lack automatic Guest user denial and mus",
+  "sys_id": "54ee88162fa7fa100fe9f74fafa4e335",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

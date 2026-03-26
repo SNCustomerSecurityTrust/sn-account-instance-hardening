@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Checks that glide.knowman.search.apply_role_based_security is set to true. When false or missing, role-based access checks on the roles field of kb_knowledge articles are bypassed during search. Articles with role restrictions may appear in search results for users who should not see them. This property must be manually created on many instances.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0824545",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11c prop-search-role-security",
+  "priority": 4,
+  "resolution_details": "Navigate to sys_properties.list and verify glide.knowman.search.apply_role_based_security exists and is set to true. If the property does not exist, create it as a true/false property with value true.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "glide.knowman.search.apply_role_based_security must be true to enforce role-base",
+  "sys_id": "9daf849a2fa7fa100fe9f74fafa4e357",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

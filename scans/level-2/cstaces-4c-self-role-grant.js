@@ -1,5 +1,7 @@
 (function(engine) {
+
     var secAdminUsers = {};
+
     function collectUser(userSysId) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -7,6 +9,7 @@
             secAdminUsers[u.user_name.toString()] = u.name.toString();
         }
     }
+
     var direct = new GlideRecord('sys_user_has_role');
     direct.addQuery('role.name', 'security_admin');
     direct.addQuery('user.active', 'true');
@@ -15,6 +18,7 @@
     while (direct.next()) {
         collectUser(direct.getValue('user'));
     }
+
     var groupRole = new GlideRecord('sys_group_has_role');
     groupRole.addQuery('role.name', 'security_admin');
     groupRole.query();
@@ -27,14 +31,18 @@
             collectUser(member.getValue('user'));
         }
     }
+
     var secAdminUsernames = [];
     for (var u in secAdminUsers) {
         secAdminUsernames.push(u);
     }
+
     gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+
     var highRiskRoles = ['admin', 'security_admin', 'impersonator'];
     var roleGrantTables = ['sys_user_has_role', 'sys_group_has_role'];
     var roleGrants = [];
+
     for (var i = 0; i < secAdminUsernames.length; i++) {
         var uname = secAdminUsernames[i];
         var audit = new GlideRecord('sys_audit');
@@ -44,10 +52,12 @@
         audit.orderByDesc('sys_created_on');
         audit.setLimit(100);
         audit.query();
+
         while (audit.next()) {
             var roleName = '';
             var recipient = '';
             var tableModified = audit.tablename.toString();
+
             var roleRecord = new GlideRecord(tableModified);
             if (roleRecord.get(audit.documentkey.toString())) {
                 roleName = roleRecord.role.name.toString();
@@ -55,6 +65,7 @@
                     roleRecord.user.user_name.toString() :
                     roleRecord.group.name.toString();
             }
+
             var isSelfGrant = (recipient === uname);
             var isHighRisk = false;
             for (var j = 0; j < highRiskRoles.length; j++) {
@@ -63,6 +74,7 @@
                     break;
                 }
             }
+
             roleGrants.push({
                 timestamp: audit.sys_created_on.toString(),
                 granted_by: uname,
@@ -78,14 +90,17 @@
             });
         }
     }
+
     var highRiskGrants = [];
     var selfGrants = [];
     for (var k = 0; k < roleGrants.length; k++) {
         if (roleGrants[k].is_self_grant) selfGrants.push(roleGrants[k]);
         if (roleGrants[k].is_high_risk_role) highRiskGrants.push(roleGrants[k]);
     }
+
     gs.info('Total role grants by security_admin users (last 30 days): ' + roleGrants.length);
     gs.info('High risk role grants (admin/security_admin/impersonator): ' + highRiskGrants.length);
     gs.info('Self grants: ' + selfGrants.length);
     gs.info(JSON.stringify(roleGrants, null, 2));
+
 })(engine);

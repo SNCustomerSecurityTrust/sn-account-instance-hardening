@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Checks that glide.knowman.apply_article_read_criteria is set to true. When false (the default), users with Can Contribute access at the KB level bypass ALL article-level Can Read and Cannot Read user criteria. This defeats the purpose of setting article-level restrictions for sensitive content within a shared knowledge base and is a prerequisite for effective article-level access segmentation.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0966771",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11b prop-apply-article-criteria",
+  "priority": 4,
+  "resolution_details": "Set glide.knowman.apply_article_read_criteria to true in sys_properties.list. Verify that KB contributors can no longer read articles restricted by article-level Cannot Read criteria. Note: this may change existing contributor behavior, so coordinate with knowledge managers before enabling.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "glide.knowman.apply_article_read_criteria must be true so that article-level use",
+  "sys_id": "fc7f40d62fa7fa100fe9f74fafa4e347",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

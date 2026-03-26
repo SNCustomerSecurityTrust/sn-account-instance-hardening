@@ -1,4 +1,5 @@
 (function (engine) {
+
 	// Find privileged users without MFA enrolled
 	var privilegedUserIds = {};
 	var adminRoleQuery = new GlideRecord('sys_user_has_role');
@@ -6,9 +7,11 @@
 	adminRoleQuery.addQuery('user.active', 'true');
 	adminRoleQuery.addQuery('state', 'active');
 	adminRoleQuery.query();
+
 	while (adminRoleQuery.next()) {
 		privilegedUserIds[adminRoleQuery.getValue('user')] = true;
 	}
+
 	var noMFAUsers = [];
 	for (var userId in privilegedUserIds) {
 		var userRecord = new GlideRecord('sys_user');
@@ -17,10 +20,13 @@
 			mfaDevice.addQuery('user', userId);
 			mfaDevice.addQuery('active', 'true');
 			mfaDevice.query();
+
 			if (!mfaDevice.hasNext()) {
+
 				engine.finding.setCurrentSource(userRecord);
 				//engine.finding.setValue('finding_details','Found with DIRECT role assignment');
 				engine.finding.increment();
+
 
 				noMFAUsers.push({
 					user: userRecord.user_name.toString(),
@@ -30,5 +36,7 @@
 			}
 		}
 	}
+
 	//gs.warn('Admin users without MFA: ' + JSON.stringify(noMFAUsers, null, 2));
+
 })(engine);

@@ -1,5 +1,7 @@
 (function(engine) {
+
     var secAdminUsers = {};
+
     function collectUser(userSysId) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -7,6 +9,7 @@
             secAdminUsers[u.user_name.toString()] = u.name.toString();
         }
     }
+
     var direct = new GlideRecord('sys_user_has_role');
     direct.addQuery('role.name', 'security_admin');
     direct.addQuery('user.active', 'true');
@@ -15,6 +18,7 @@
     while (direct.next()) {
         collectUser(direct.getValue('user'));
     }
+
     var groupRole = new GlideRecord('sys_group_has_role');
     groupRole.addQuery('role.name', 'security_admin');
     groupRole.query();
@@ -27,13 +31,17 @@
             collectUser(member.getValue('user'));
         }
     }
+
     var secAdminUsernames = [];
     for (var u in secAdminUsers) {
         secAdminUsernames.push(u);
     }
+
     //gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+
     var highRiskTables = ['sys_acl', 'sys_security_acl', 'sys_user_has_role', 'sys_group_has_role'];
     var aclChanges = [];
+
     for (var i = 0; i < secAdminUsernames.length; i++) {
         var uname = secAdminUsernames[i];
         var audit = new GlideRecord('sys_audit');
@@ -44,9 +52,17 @@
         audit.setLimit(100);
         audit.query();
         while (audit.next()) {
-			engine.finding.setCurrentSource(audit);
-			//engine.finding.setValue('finding_details','');
+			
+			var aclRec = new GlideRecord(audit.tablename);
+			aclRec.get(audit.documentkey);
+
+			var fieldModified = audit.fieldname.getDisplayValue();
+			
+
+			engine.finding.setCurrentSource(aclRec);
+			engine.finding.setValue('finding_details','Modification of ACL field:'+fieldModified + ' by user:'+audit.user);
 			engine.finding.increment();
+
 
             aclChanges.push({
                 timestamp: audit.sys_created_on.toString(),
@@ -61,6 +77,8 @@
 			
         }
     }
+
     // gs.info('ACL modifications by security_admin users (last 30 days): ' + aclChanges.length);
     // gs.info(JSON.stringify(aclChanges, null, 2));
+
 })(engine);

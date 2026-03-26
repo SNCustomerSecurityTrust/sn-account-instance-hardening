@@ -146,8 +146,10 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 ```javascript
 (function(engine) {
 
+
     var privilegedRoles = ['admin', 'security_admin', 'user_admin'];
     var privilegedUsers = {};
+
     function addUser(userSysId, role, source) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -176,6 +178,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             }
         }
     }
+
     // Direct role assignments
     for (var i = 0; i < privilegedRoles.length; i++) {
         var roleName = privilegedRoles[i];
@@ -188,10 +191,11 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             addUser(direct.getValue('user'), roleName, 'direct:' + roleName);
 			var userRec = direct.user.getRefRecord();
 			engine.finding.setCurrentSource(userRec);
-			engine.finding.setValue('finding_details','Found with DIRECT role assignment');
+			engine.finding.setValue('finding_details','Found with DIRECT role:'+roleName);
 			engine.finding.increment();
         }
     }
+
     // Group-inherited assignments
     for (var j = 0; j < privilegedRoles.length; j++) {
         var groupRoleName = privilegedRoles[j];
@@ -208,27 +212,32 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
                 addUser(member.getValue('user'), groupRoleName, 'group:' + groupName + ':' + groupRoleName);
 				var userRec2 = member.user.getRefRecord();
 				engine.finding.setCurrentSource(userRec2);
-				engine.finding.setValue('finding_details','Found with GROUP INHEIRITED role assignment');
+				engine.finding.setValue('finding_details','Found with role:'+groupRoleName+' INHEIRITED via group:'+groupName);
 				engine.finding.increment();
             }
         }
     }
+
     var results = [];
     for (var uname in privilegedUsers) {
         results.push(privilegedUsers[uname]);
     }
+
     var multiRole = results.filter(function(u) {
         return u.roles.length > 1;
     });
     var serviceAccounts = results.filter(function(u) {
         return u.is_service_account;
     });
+
     // gs.info('Total privileged users: ' + results.length);
     // gs.info('Users with multiple high privilege roles: ' + multiRole.length);
     // gs.info('Potential service accounts: ' + serviceAccounts.length);
     // gs.info(JSON.stringify(results, null, 2));
 
+
     
+
 })(engine);
 ```
 
@@ -246,113 +255,131 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 <summary>View Script</summary>
 
 ```javascript
-(function(engine) {
-    /**
-     * Query 1b: Users with Multiple High-Privilege Roles
-     *
-     * Purpose:
-     * Identifies active users who hold more than one high-privilege role
-     * simultaneously. Role accumulation violates the principle of least privilege
-     * and significantly expands the blast radius of a compromised account.
-     *
-     * What it checks:
-     * - Direct and group-inherited assignments for admin, security_admin,
-     *   user_admin, delegated_admin, itil_admin, catalog_admin, knowledge_admin
-     * - Flags any user holding 2 or more roles from this list
-     * - Results sorted by role count descending
-     * - Last login timestamp and service account flag
-     *
-     * Tables queried: sys_user_has_role, sys_group_has_role, sys_user_grmember
-     */
-    var privilegedRoles = [
-        'admin',
-        'security_admin',
-        'user_admin',
-        'delegated_admin',
-        'itil_admin',
-        'catalog_admin',
-        'knowledge_admin'
-    ];
-    var privilegedUsers = {};
-    function addUser(userSysId, role, source) {
-        if (!userSysId) return;
-        var u = new GlideRecord('sys_user');
-        if (u.get(userSysId)) {
-            if (!u.active) return;
-            var uname = u.user_name.toString();
-            if (!privilegedUsers[uname]) {
-                privilegedUsers[uname] = {
-                    user: u.name.toString(),
-                    user_name: uname,
-                    email: u.email.toString(),
-                    last_login: u.last_login_time.toString(),
-                    is_service_account: (uname.indexOf('svc') > -1 ||
-                        uname.indexOf('service') > -1 ||
-                        uname.indexOf('integration') > -1 ||
-                        uname.indexOf('api') > -1) ? true : false,
-                    roles: [],
-                    sources: []
-                };
-            }
-            if (privilegedUsers[uname].roles.indexOf(role) === -1) {
-                privilegedUsers[uname].roles.push(role);
-            }
-            if (privilegedUsers[uname].sources.indexOf(source) === -1) {
-                privilegedUsers[uname].sources.push(source);
-            }
-        }
-    }
-    for (var i = 0; i < privilegedRoles.length; i++) {
-        var roleName = privilegedRoles[i];
-        var direct = new GlideRecord('sys_user_has_role');
-        direct.addQuery('role.name', roleName);
-        direct.addQuery('user.active', 'true');
-        direct.addQuery('state', 'active');
-        direct.query();
-        while (direct.next()) {
-            addUser(direct.getValue('user'), roleName, 'direct:' + roleName);
-			var userRec = direct.user.getRefRecord();
-			engine.finding.setCurrentSource(userRec);
-			engine.finding.setValue('finding_details','Found with DIRECT role assignment');
-			engine.finding.increment();
-        }
-    }
-    for (var j = 0; j < privilegedRoles.length; j++) {
-        var groupRoleName = privilegedRoles[j];
-        var groupRole = new GlideRecord('sys_group_has_role');
-        groupRole.addQuery('role.name', groupRoleName);
-        groupRole.query();
-        while (groupRole.next()) {
-            var groupName = groupRole.group.name.toString();
-            var member = new GlideRecord('sys_user_grmember');
-            member.addQuery('group', groupRole.getValue('group'));
-            member.addQuery('user.active', 'true');
-            member.query();
-            while (member.next()) {
-                addUser(member.getValue('user'), groupRoleName, 'group:' + groupName + ':' + groupRoleName);
-				var userRec2 = member.user.getRefRecord();
-				engine.finding.setCurrentSource(userRec2);
-				engine.finding.setValue('finding_details','Found with GROUP INHEIRITED role assignment');
-				engine.finding.increment();
-            }
-        }
-    }
-    var results = [];
-    for (var uname in privilegedUsers) {
-        if (privilegedUsers[uname].roles.length > 1) {
-            results.push(privilegedUsers[uname]);
-        }
-    }
-    results.sort(function(a, b) {
-        return b.roles.length - a.roles.length;
-    });
-    var serviceAccounts = results.filter(function(u) {
-        return u.is_service_account;
-    });
-    // gs.info('Users with multiple high-privilege roles: ' + results.length);
-    // gs.info('Potential service accounts with multiple roles: ' + serviceAccounts.length);
-    // gs.info(JSON.stringify(results, null, 2));
-})(engine);
+ /**
+  * Query 1b: Users with Multiple High-Privilege Roles
+  *
+  * Purpose:
+  * Identifies active users who hold more than one high-privilege role
+  * simultaneously. Role accumulation violates the principle of least privilege
+  * and significantly expands the blast radius of a compromised account.
+  *
+  * What it checks:
+  * - Direct and group-inherited assignments for admin, security_admin,
+  *   user_admin, delegated_admin, itil_admin, catalog_admin, knowledge_admin
+  * - Flags any user holding 2 or more roles from this list
+  * - Results sorted by role count descending
+  * - Last login timestamp and service account flag
+  *
+  * Tables queried: sys_user_has_role, sys_group_has_role, sys_user_grmember
+  */
+
+ var privilegedRoles = [
+     'user_admin',
+     'delegated_developer',
+     'itil_admin',
+     'catalog_admin',
+     'knowledge_admin'
+ ];
+
+ var privilegedUsers = {};
+
+ function addUser(userSysId, role, source) {
+     if (!userSysId) return;
+     var u = new GlideRecord('sys_user');
+     if (u.get(userSysId)) {
+         if (!u.active) return;
+         var uname = u.user_name.toString();
+         if (!privilegedUsers[uname]) {
+             privilegedUsers[uname] = {
+                 user: u.name.toString(),
+                 user_name: uname,
+                 email: u.email.toString(),
+                 last_login: u.last_login_time.toString(),
+                 is_service_account: (uname.indexOf('svc') > -1 ||
+                     uname.indexOf('service') > -1 ||
+                     uname.indexOf('integration') > -1 ||
+                     uname.indexOf('api') > -1) ? true : false,
+                 roles: [],
+                 sources: []
+             };
+         }
+         if (privilegedUsers[uname].roles.indexOf(role) === -1) {
+             privilegedUsers[uname].roles.push(role);
+         }
+         if (privilegedUsers[uname].sources.indexOf(source) === -1) {
+             privilegedUsers[uname].sources.push(source);
+         }
+     }
+ }
+
+ for (var i = 0; i < privilegedRoles.length; i++) {
+     var roleName = privilegedRoles[i];
+     var direct = new GlideRecord('sys_user_has_role');
+     direct.addQuery('role.name', roleName);
+     direct.addQuery('user.active', 'true');
+     direct.addQuery('state', 'active');
+     direct.query();
+     while (direct.next()) {
+         addUser(direct.getValue('user'), roleName, 'direct:' + roleName);
+         var userRec = direct.user.getRefRecord();
+         //engine.finding.setCurrentSource(userRec);
+         //engine.finding.setValue('finding_details','Found with DIRECT role assignment');
+         //engine.finding.increment();
+     }
+ }
+
+ for (var j = 0; j < privilegedRoles.length; j++) {
+     var groupRoleName = privilegedRoles[j];
+     var groupRole = new GlideRecord('sys_group_has_role');
+     groupRole.addQuery('role.name', groupRoleName);
+     groupRole.query();
+     while (groupRole.next()) {
+         var groupName = groupRole.group.name.toString();
+         var member = new GlideRecord('sys_user_grmember');
+         member.addQuery('group', groupRole.getValue('group'));
+         member.addQuery('user.active', 'true');
+         member.query();
+         while (member.next()) {
+             addUser(member.getValue('user'), groupRoleName, 'group:' + groupName + ':' + groupRoleName);
+             var userRec2 = member.user.getRefRecord();
+             //engine.finding.setCurrentSource(userRec2);
+             //engine.finding.setValue('finding_details','Found with GROUP INHEIRITED role assignment');
+             //engine.finding.increment();
+         }
+     }
+ }
+
+ var results = [];
+ for (var uname in privilegedUsers) {
+     if (privilegedUsers[uname].roles.length > 1) {
+         results.push(privilegedUsers[uname]);
+     }
+ }
+
+ results.sort(function(a, b) {
+     return b.roles.length - a.roles.length;
+ });
+
+ var serviceAccounts = results.filter(function(u) {
+     return u.is_service_account;
+ });
+
+
+ for (var i2 = 0; i2 < results.length; i2++) {
+     var resultRec = results[i2];
+     var userRec3 = new GlideRecord('sys_user');
+     userRec3.get('user_name', resultRec.user_name);
+
+     engine.finding.setCurrentSource(userRec3);
+     engine.finding.setValue('finding_details','Account found with multiple high-priv roles:'+resultRec.roles.join());
+     engine.finding.increment();
+
+
+ }
+
+//  gs.info('Users with multiple high-privilege roles: ' + results.length);
+//  gs.info('Potential service accounts with multiple roles: ' + serviceAccounts.length);
+//  gs.info(JSON.stringify(results, null, 2));
 ```
 
 </details>
@@ -361,7 +388,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ### Inactive users with elevated roles (recent)
 
-**What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 90 days as highest reactivation risk.
+**What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 60 days as highest reactivation risk.
 
 **Why:** If a deprovisioned account is reactivated (intentionally or accidentally), elevated access is immediately restored without requiring a new approval. This is a common gap in offboarding processes and violates NIST AC-2(3) requirements for disabling inactive accounts and revoking associated authorizations.
 
@@ -370,6 +397,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     var roleList = [
         'admin',
         'security_admin',
@@ -380,17 +408,22 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         'catalog_admin',
         'knowledge_admin'
     ];
+
     var inactiveRoles = new GlideRecord('sys_user_has_role');
     inactiveRoles.addQuery('role.name', 'IN', roleList.join(','));
     inactiveRoles.addQuery('user.active', false);
     inactiveRoles.addQuery('state', 'active'); // Role assignment is still active even though the user is not
     inactiveRoles.query();
+
     var direct = [];
     var inherited = [];
+
     while (inactiveRoles.next()) {
+
 		//var userRec = inactiveRoles.user.getRefRecord();
 		//engine.finding.setCurrentSource(userRec);
 		//engine.finding.increment();
+
         var uname = inactiveRoles.user.user_name.toString();
         var record = {
             sys_id: inactiveRoles.getUniqueValue(),
@@ -408,16 +441,19 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
                 uname.indexOf('integration') > -1 ||
                 uname.indexOf('api') > -1) ? true : false
         };
+
         if (inactiveRoles.inherited.toString() === 'false') {
             direct.push(record);
         } else {
             inherited.push(record);
         }
     }
+
     // Flag recently deactivated users (last 60 days) - highest reactivation risk
     // Note: uses sys_updated_on as proxy since ServiceNow has no dedicated deactivation timestamp
     var recentlyDeactivated = [];
     var allRecords = direct.concat(inherited);
+
     for (var i = 0; i < allRecords.length; i++) {
         var deactivatedUser = new GlideRecord('sys_user');
         deactivatedUser.get(allRecords[i].user_sys_id);
@@ -427,8 +463,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         if (updatedOn.compareTo(checkDaysAgo) > 0) {
 			
 			engine.finding.setCurrentSource(deactivatedUser);
-			engine.finding.setValue('finding_details',i);
+			engine.finding.setValue('finding_details','Inactive account w high-perm roles (newer than 60 days)');
 			engine.finding.increment();
+
             recentlyDeactivated.push({
                 user_name: allRecords[i].user_name,
                 user_display_name: allRecords[i].user_display_name,
@@ -441,9 +478,11 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         
 		}
     }
+
     var serviceAccounts = allRecords.filter(function(u) {
         return u.is_service_account;
     });
+
     // gs.info('=== DEPROVISIONED USERS WITH PRIVILEGED ROLES ===');
     // gs.info('Direct assignments (critical - survives reactivation): ' + direct.length);
     // gs.info('Inherited assignments (high - survives reactivation): ' + inherited.length);
@@ -456,6 +495,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     // gs.info(JSON.stringify(inherited, null, 2));
     // gs.info('\nRecently deactivated users:');
     // gs.info(JSON.stringify(recentlyDeactivated, null, 2));
+
 })(engine);
 ```
 
@@ -465,7 +505,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ### Inactive users with elevated roles (older)
 
-**What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 90 days as highest reactivation risk.
+**What:** Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 60 days as highest reactivation risk.
 
 **Why:** If a deprovisioned account is reactivated (intentionally or accidentally), elevated access is immediately restored without requiring a new approval. This is a common gap in offboarding processes and violates NIST AC-2(3) requirements for disabling inactive accounts and revoking associated authorizations.
 
@@ -474,6 +514,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     var roleList = [
         'admin',
         'security_admin',
@@ -484,17 +525,22 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         'catalog_admin',
         'knowledge_admin'
     ];
+
     var inactiveRoles = new GlideRecord('sys_user_has_role');
     inactiveRoles.addQuery('role.name', 'IN', roleList.join(','));
     inactiveRoles.addQuery('user.active', false);
     inactiveRoles.addQuery('state', 'active'); // Role assignment is still active even though the user is not
     inactiveRoles.query();
+
     var direct = [];
     var inherited = [];
+
     while (inactiveRoles.next()) {
+
 		//var userRec = inactiveRoles.user.getRefRecord();
 		//engine.finding.setCurrentSource(userRec);
 		//engine.finding.increment();
+
         var uname = inactiveRoles.user.user_name.toString();
         var record = {
             sys_id: inactiveRoles.getUniqueValue(),
@@ -512,16 +558,19 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
                 uname.indexOf('integration') > -1 ||
                 uname.indexOf('api') > -1) ? true : false
         };
+
         if (inactiveRoles.inherited.toString() === 'false') {
             direct.push(record);
         } else {
             inherited.push(record);
         }
     }
+
     // Flag recently deactivated users (last 60 days) - highest reactivation risk
     // Note: uses sys_updated_on as proxy since ServiceNow has no dedicated deactivation timestamp
     var recentlyDeactivated = [];
     var allRecords = direct.concat(inherited);
+
     for (var i = 0; i < allRecords.length; i++) {
         var deactivatedUser = new GlideRecord('sys_user');
         deactivatedUser.get(allRecords[i].user_sys_id);
@@ -531,8 +580,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         if (updatedOn.compareTo(checkDaysAgo) < 0) {
 			
 			engine.finding.setCurrentSource(deactivatedUser);
-			//engine.finding.setValue('finding_details','Found with DIRECT role assignment');
+			engine.finding.setValue('finding_details','Inactive account w high-perm roles (older than 60 days)');
 			engine.finding.increment();
+
             recentlyDeactivated.push({
                 user_name: allRecords[i].user_name,
                 user_display_name: allRecords[i].user_display_name,
@@ -545,9 +595,11 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         
 		}
     }
+
     var serviceAccounts = allRecords.filter(function(u) {
         return u.is_service_account;
     });
+
     // gs.info('=== DEPROVISIONED USERS WITH PRIVILEGED ROLES ===');
     // gs.info('Direct assignments (critical - survives reactivation): ' + direct.length);
     // gs.info('Inherited assignments (high - survives reactivation): ' + inherited.length);
@@ -560,6 +612,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     // gs.info(JSON.stringify(inherited, null, 2));
     // gs.info('\nRecently deactivated users:');
     // gs.info(JSON.stringify(recentlyDeactivated, null, 2));
+
 })(engine);
 ```
 
@@ -578,7 +631,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     var impersonators = {};
+
     function addUser(userSysId, source) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -603,6 +658,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             }
         }
     }
+
     // 1. Direct impersonator role
     var direct = new GlideRecord('sys_user_has_role');
     direct.addQuery('role.name', 'impersonator');
@@ -610,26 +666,33 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     direct.addQuery('state', 'active');
     direct.query();
     while (direct.next()) {
+
 		var userRec = direct.user.getRefRecord();
 		engine.finding.setCurrentSource(userRec);
 		engine.finding.setValue('finding_details','Found with DIRECT IMPERSONATOR role assignment');
 		engine.finding.increment();
+
         addUser(direct.getValue('user'), 'direct:impersonator');
+
     }
-    // 2. Direct admin role (implicitly grants impersonation)
-    var adminDirect = new GlideRecord('sys_user_has_role');
-    adminDirect.addQuery('role.name', 'admin');
-    adminDirect.addQuery('user.active', 'true');
-    adminDirect.addQuery('state', 'active');
-    adminDirect.query();
-    while (adminDirect.next()) {
-		var userRec2 = adminDirect.user.getRefRecord();
-		engine.finding.setCurrentSource(userRec2);
-		engine.finding.setValue('finding_details','Found with ADMIN role assignment');
-		engine.finding.increment();
-        addUser(adminDirect.getValue('user'), 'direct:admin');
+
+    // // 2. Direct admin role (implicitly grants impersonation)
+    // var adminDirect = new GlideRecord('sys_user_has_role');
+    // adminDirect.addQuery('role.name', 'admin');
+    // adminDirect.addQuery('user.active', 'true');
+    // adminDirect.addQuery('state', 'active');
+    // adminDirect.query();
+    // while (adminDirect.next()) {
+
+	// 	var userRec2 = adminDirect.user.getRefRecord();
+	// 	engine.finding.setCurrentSource(userRec2);
+	// 	engine.finding.setValue('finding_details','Found with ADMIN role assignment');
+	// 	engine.finding.increment();
+
+    //     addUser(adminDirect.getValue('user'), 'direct:admin');
     
-	}
+	// }
+
     // // 3. Direct security_admin role
     // var secAdmin = new GlideRecord('sys_user_has_role');
     // secAdmin.addQuery('role.name', 'security_admin');
@@ -637,13 +700,17 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     // secAdmin.addQuery('state', 'active');
     // secAdmin.query();
     // while (secAdmin.next()) {
+
 	// 	var userRec3 = secAdmin.user.getRefRecord();
 	// 	engine.finding.setCurrentSource(userRec3);
 	// 	engine.finding.increment();
+
     //     addUser(secAdmin.getValue('user'), 'direct:security_admin');
+
     // }
+
     // 4. Group-inherited impersonator, admin, security_admin
-    var elevatedRoles = ['impersonator', 'admin'];
+    var elevatedRoles = ['impersonator']; //removed admin Mar 2026
     for (var e = 0; e < elevatedRoles.length; e++) {
         var elevatedRoleName = elevatedRoles[e];
         var groupRole = new GlideRecord('sys_group_has_role');
@@ -656,15 +723,18 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             member.addQuery('user.active', 'true');
             member.query();
             while (member.next()) {
+
 				var userRec4 = direct.user.getRefRecord();
 				engine.finding.setCurrentSource(userRec4);
-				engine.finding.setValue('finding_details','Found with GROUP INHEIRITED IMP role assignment');
+				engine.finding.setValue('finding_details','Found with IMPERSONATOR via Group assignment:'+member.group.name);
 				engine.finding.increment();
+
                 addUser(member.getValue('user'), 'group:' + groupName + ':' + elevatedRoleName);
             
 			}
         }
     }
+
     // // 5. Parent roles containing impersonator as a child role (role hierarchy)
     // var childRole = new GlideRecord('sys_user_role_contains');
     // childRole.addQuery('role.name', 'impersonator');
@@ -672,17 +742,22 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     // while (childRole.next()) {
     //     var parentRoleName = childRole.parent.name.toString();
     //     var parentRoleId = childRole.getValue('parent');
+
     //     var parentUsers = new GlideRecord('sys_user_has_role');
     //     parentUsers.addQuery('role', parentRoleId);
     //     parentUsers.addQuery('user.active', 'true');
     //     parentUsers.query();
     //     while (parentUsers.next()) {
+
 	// 		var userRec5 = parentUsers.user.getRefRecord();
 	// 		engine.finding.setCurrentSource(userRec5);
 	// 		engine.finding.setValue('finding_details','Found with NESTED role assignment');
 	// 		engine.finding.increment();
+
     //         addUser(parentUsers.getValue('user'), 'inherited_role:' + parentRoleName);
+
     //     }
+
     //     var parentGroups = new GlideRecord('sys_group_has_role');
     //     parentGroups.addQuery('role', parentRoleId);
     //     parentGroups.query();
@@ -693,28 +768,34 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     //         gMembers.addQuery('user.active', 'true');
     //         gMembers.query();
     //         while (gMembers.next()) {
+
 	// 			var userRec6 = gMembers.user.getRefRecord();
 	// 			engine.finding.setCurrentSource(userRec6);
 	// 			engine.finding.increment();
+
     //             addUser(gMembers.getValue('user'), 'group_inherited_role:' + gName + ':' + parentRoleName);
             
 	// 		}
     //     }
     // }
+
     var results = [];
     for (var uname in impersonators) {
         results.push(impersonators[uname]);
     }
+
     var serviceAccounts = results.filter(function(u) {
         return u.is_service_account;
     });
     var humanAccounts = results.filter(function(u) {
         return !u.is_service_account;
     });
+
     // gs.info('Total users with impersonation capability: ' + results.length);
     // gs.info('Human accounts: ' + humanAccounts.length);
     // gs.info('Potential service accounts: ' + serviceAccounts.length);
     // gs.info(JSON.stringify(results, null, 2));
+
 })(engine);
 ```
 
@@ -733,7 +814,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     // var impersonators = {};
+
     // function addUser(userSysId, source) {
     //     if (!userSysId) return;
     //     var u = new GlideRecord('sys_user');
@@ -759,6 +842,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     //     }
     // }
 
+
     // 5. Parent roles containing impersonator as a child role (role hierarchy)
     var childRole = new GlideRecord('sys_user_role_contains');
     childRole.addQuery('contains.name', 'impersonator');
@@ -766,17 +850,22 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     while (childRole.next()) {
         var parentRoleName = childRole.parent.name.toString();
         var parentRoleId = childRole.getValue('parent');
+
         // var parentUsers = new GlideRecord('sys_user_has_role');
         // parentUsers.addQuery('role', parentRoleId);
         // parentUsers.addQuery('user.active', 'true');
         // parentUsers.query();
         // while (parentUsers.next()) {
+
         //     var userRec5 = parentUsers.user.getRefRecord();
 		engine.finding.setCurrentSource(childRole);
 		engine.finding.setValue('finding_details', 'Found with NESTED IMPERSONATOR role assignment');
 		engine.finding.increment();
+
         //     //addUser(parentUsers.getValue('user'), 'inherited_role:' + parentRoleName);
+
         // }
+
         var parentGroups = new GlideRecord('sys_group_has_role');
         parentGroups.addQuery('role', parentRoleId);
         parentGroups.query();
@@ -787,28 +876,35 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             gMembers.addQuery('user.active', 'true');
             gMembers.query();
             while (gMembers.next()) {
+
                 var userRec6 = gMembers.user.getRefRecord();
                 engine.finding.setCurrentSource(userRec6);
 				engine.finding.setValue('finding_details', 'Found with GROUP ASSIGNED NESTED role assignment');
                 engine.finding.increment();
+
                 //addUser(gMembers.getValue('user'), 'group_inherited_role:' + gName + ':' + parentRoleName);
+
             }
         }
     }
+
     // var results = [];
     // for (var uname in impersonators) {
     //     results.push(impersonators[uname]);
     // }
+
     // var serviceAccounts = results.filter(function(u) {
     //     return u.is_service_account;
     // });
     // var humanAccounts = results.filter(function(u) {
     //     return !u.is_service_account;
     // });
+
     // gs.info('Total users with impersonation capability: ' + results.length);
     // gs.info('Human accounts: ' + humanAccounts.length);
     // gs.info('Potential service accounts: ' + serviceAccounts.length);
     // gs.info(JSON.stringify(results, null, 2));
+
 })(engine);
 ```
 
@@ -827,7 +923,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     var secAdmins = {};
+
     function addUser(userSysId, source) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -852,17 +950,22 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             }
         }
     }
+
     var direct = new GlideRecord('sys_user_has_role');
     direct.addQuery('role.name', 'security_admin');
     direct.addQuery('user.active', 'true');
     direct.addQuery('state', 'active');
     direct.query();
     while (direct.next()) {
+
 		var userRec = direct.user.getRefRecord();
 		engine.finding.setCurrentSource(userRec);
+		engine.finding.setValue('finding_details', 'User found with DIRECT security_admin role assignment');
 		engine.finding.increment();
+
         addUser(direct.getValue('user'), 'direct:security_admin');
     }
+
     var groupRole = new GlideRecord('sys_group_has_role');
     groupRole.addQuery('role.name', 'security_admin');
     groupRole.query();
@@ -873,12 +976,16 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         member.addQuery('user.active', 'true');
         member.query();
         while (member.next()) {
+
 			var userRec2 = groupRole.user.getRefRecord();
 			engine.finding.setCurrentSource(userRec2);
+			engine.finding.setValue('finding_details', 'Found with NESTED security_admin role via:'+groupName);
 			engine.finding.increment();
+
             addUser(member.getValue('user'), 'group:' + groupName);
         }
     }
+
     var results = [];
     for (var uname in secAdmins) {
         var entry = secAdmins[uname];
@@ -892,6 +999,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         entry.has_admin = adminCheck.next() ? true : false;
         results.push(entry);
     }
+
     var withAdmin = results.filter(function(u) {
         return u.has_admin;
     });
@@ -901,11 +1009,13 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     var serviceAccounts = results.filter(function(u) {
         return u.is_service_account;
     });
+
     // gs.info('Total users with security_admin: ' + results.length);
     // gs.info('Also have admin (compounding privilege): ' + withAdmin.length);
     // gs.info('security_admin without admin: ' + withoutAdmin.length);
     // gs.info('Potential service accounts: ' + serviceAccounts.length);
     // gs.info(JSON.stringify(results, null, 2));
+
 })(engine);
 ```
 
@@ -924,20 +1034,24 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     // Find integration users with overly broad access
     var integrationUser = new GlideRecord('sys_user');
     integrationUser.addQuery('web_service_access_only', 'true');
     integrationUser.addQuery('active', 'true');
     integrationUser.query();
+
     var integrationUsers = [];
     while (integrationUser.next()) {
         var roles = [];
         var userRoleAssignment = new GlideRecord('sys_user_has_role');
         userRoleAssignment.addQuery('user', integrationUser.getUniqueValue());
         userRoleAssignment.query();
+
         while (userRoleAssignment.next()) {
             roles.push(userRoleAssignment.role.name.toString());
         }
+
         // Flag if integration user has any role containing "admin"
         var hasAdminRole = false;
         for (var i = 0; i < roles.length; i++) {
@@ -946,9 +1060,13 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
                 break;
             }
         }
+
         if (hasAdminRole) {
+
 			engine.finding.setCurrentSource(integrationUser);
+			engine.finding.setValue('finding_details','Integration account found with role:'+roles[i]);
 			engine.finding.increment();
+
             integrationUsers.push({
                 user: integrationUser.user_name.toString(),
                 name: integrationUser.name.toString(),
@@ -957,7 +1075,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             });
         }
     }
+
     //gs.warn('Integration users with admin roles: ' + JSON.stringify(integrationUsers, null, 2));
+
 })(engine);
 ```
 
@@ -978,7 +1098,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     var secAdmins = {};
+
     function addUser(userSysId, source) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -1003,17 +1125,21 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             }
         }
     }
+
     var direct = new GlideRecord('sys_user_has_role');
     direct.addQuery('role.name', 'security_admin');
     direct.addQuery('user.active', 'true');
     direct.addQuery('state', 'active');
     direct.query();
     while (direct.next()) {
+
 		var userRec = direct.user.getRefRecord();
 		engine.finding.setCurrentSource(userRec);
 		engine.finding.increment();
+
         addUser(direct.getValue('user'), 'direct:security_admin');
     }
+
     var groupRole = new GlideRecord('sys_group_has_role');
     groupRole.addQuery('role.name', 'security_admin');
     groupRole.query();
@@ -1024,12 +1150,15 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         member.addQuery('user.active', 'true');
         member.query();
         while (member.next()) {
+
 			var userRec2 = groupRole.user.getRefRecord();
 			engine.finding.setCurrentSource(userRec2);
 			engine.finding.increment();
+
             addUser(member.getValue('user'), 'group:' + groupName);
         }
     }
+
     var results = [];
     for (var uname in secAdmins) {
         var entry = secAdmins[uname];
@@ -1043,6 +1172,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         entry.has_admin = adminCheck.next() ? true : false;
         results.push(entry);
     }
+
     var withAdmin = results.filter(function(u) {
         return u.has_admin;
     });
@@ -1052,11 +1182,13 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     var serviceAccounts = results.filter(function(u) {
         return u.is_service_account;
     });
+
     // gs.info('Total users with security_admin: ' + results.length);
     // gs.info('Also have admin (compounding privilege): ' + withAdmin.length);
     // gs.info('security_admin without admin: ' + withoutAdmin.length);
     // gs.info('Potential service accounts: ' + serviceAccounts.length);
     // gs.info(JSON.stringify(results, null, 2));
+
 })(engine);
 ```
 
@@ -1075,7 +1207,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     var secAdminUsers = {};
+
     function collectUser(userSysId) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -1083,6 +1217,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             secAdminUsers[u.user_name.toString()] = u.name.toString();
         }
     }
+
     var direct = new GlideRecord('sys_user_has_role');
     direct.addQuery('role.name', 'security_admin');
     direct.addQuery('user.active', 'true');
@@ -1091,6 +1226,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     while (direct.next()) {
         collectUser(direct.getValue('user'));
     }
+
     var groupRole = new GlideRecord('sys_group_has_role');
     groupRole.addQuery('role.name', 'security_admin');
     groupRole.query();
@@ -1103,13 +1239,17 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             collectUser(member.getValue('user'));
         }
     }
+
     var secAdminUsernames = [];
     for (var u in secAdminUsers) {
         secAdminUsernames.push(u);
     }
+
     //gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+
     var highRiskTables = ['sys_acl', 'sys_security_acl', 'sys_user_has_role', 'sys_group_has_role'];
     var aclChanges = [];
+
     for (var i = 0; i < secAdminUsernames.length; i++) {
         var uname = secAdminUsernames[i];
         var audit = new GlideRecord('sys_audit');
@@ -1120,9 +1260,17 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         audit.setLimit(100);
         audit.query();
         while (audit.next()) {
-			engine.finding.setCurrentSource(audit);
-			//engine.finding.setValue('finding_details','');
+			
+			var aclRec = new GlideRecord(audit.tablename);
+			aclRec.get(audit.documentkey);
+
+			var fieldModified = audit.fieldname.getDisplayValue();
+			
+
+			engine.finding.setCurrentSource(aclRec);
+			engine.finding.setValue('finding_details','Modification of ACL field:'+fieldModified + ' by user:'+audit.user);
 			engine.finding.increment();
+
 
             aclChanges.push({
                 timestamp: audit.sys_created_on.toString(),
@@ -1137,8 +1285,10 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 			
         }
     }
+
     // gs.info('ACL modifications by security_admin users (last 30 days): ' + aclChanges.length);
     // gs.info(JSON.stringify(aclChanges, null, 2));
+
 })(engine);
 ```
 
@@ -1157,7 +1307,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     var secAdminUsers = {};
+
     function collectUser(userSysId) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -1165,6 +1317,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             secAdminUsers[u.user_name.toString()] = u.name.toString();
         }
     }
+
     var direct = new GlideRecord('sys_user_has_role');
     direct.addQuery('role.name', 'security_admin');
     direct.addQuery('user.active', 'true');
@@ -1173,6 +1326,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     while (direct.next()) {
         collectUser(direct.getValue('user'));
     }
+
     var groupRole = new GlideRecord('sys_group_has_role');
     groupRole.addQuery('role.name', 'security_admin');
     groupRole.query();
@@ -1185,14 +1339,18 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             collectUser(member.getValue('user'));
         }
     }
+
     var secAdminUsernames = [];
     for (var u in secAdminUsers) {
         secAdminUsernames.push(u);
     }
+
     gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+
     var highRiskRoles = ['admin', 'security_admin', 'impersonator'];
     var roleGrantTables = ['sys_user_has_role', 'sys_group_has_role'];
     var roleGrants = [];
+
     for (var i = 0; i < secAdminUsernames.length; i++) {
         var uname = secAdminUsernames[i];
         var audit = new GlideRecord('sys_audit');
@@ -1202,10 +1360,12 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         audit.orderByDesc('sys_created_on');
         audit.setLimit(100);
         audit.query();
+
         while (audit.next()) {
             var roleName = '';
             var recipient = '';
             var tableModified = audit.tablename.toString();
+
             var roleRecord = new GlideRecord(tableModified);
             if (roleRecord.get(audit.documentkey.toString())) {
                 roleName = roleRecord.role.name.toString();
@@ -1213,6 +1373,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
                     roleRecord.user.user_name.toString() :
                     roleRecord.group.name.toString();
             }
+
             var isSelfGrant = (recipient === uname);
             var isHighRisk = false;
             for (var j = 0; j < highRiskRoles.length; j++) {
@@ -1221,6 +1382,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
                     break;
                 }
             }
+
             roleGrants.push({
                 timestamp: audit.sys_created_on.toString(),
                 granted_by: uname,
@@ -1236,16 +1398,19 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             });
         }
     }
+
     var highRiskGrants = [];
     var selfGrants = [];
     for (var k = 0; k < roleGrants.length; k++) {
         if (roleGrants[k].is_self_grant) selfGrants.push(roleGrants[k]);
         if (roleGrants[k].is_high_risk_role) highRiskGrants.push(roleGrants[k]);
     }
+
     gs.info('Total role grants by security_admin users (last 30 days): ' + roleGrants.length);
     gs.info('High risk role grants (admin/security_admin/impersonator): ' + highRiskGrants.length);
     gs.info('Self grants: ' + selfGrants.length);
     gs.info(JSON.stringify(roleGrants, null, 2));
+
 })(engine);
 ```
 
@@ -1264,7 +1429,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     var secAdminUsers = {};
+
     function collectUser(userSysId) {
         if (!userSysId) return;
         var u = new GlideRecord('sys_user');
@@ -1272,6 +1439,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             secAdminUsers[u.user_name.toString()] = u.name.toString();
         }
     }
+
     var direct = new GlideRecord('sys_user_has_role');
     direct.addQuery('role.name', 'admin');
     direct.addQuery('user.active', 'true');
@@ -1280,6 +1448,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     while (direct.next()) {
         collectUser(direct.getValue('user'));
     }
+
     var groupRole = new GlideRecord('sys_group_has_role');
     groupRole.addQuery('role.name', 'admin');
     groupRole.query();
@@ -1292,11 +1461,14 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             collectUser(member.getValue('user'));
         }
     }
+
     var secAdminUsernames = [];
     for (var u in secAdminUsers) {
         secAdminUsernames.push(u);
     }
+
     //gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+
     var encryptionTables = [
         'sys_kmf_crypto_module', // Crypto modules
         'sys_kmf_map', // Key maps (which fields are encrypted)
@@ -1308,8 +1480,10 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         'sys_certificate', // Certificates
         'sys_encryption_context' // Encryption contexts
     ];
+
     var highRiskTables = ['sys_kmf_map', 'sys_kmf_key', 'sys_kmf_crypto_module'];
     var encryptionChanges = [];
+
     for (var i = 0; i < secAdminUsernames.length; i++) {
         var uname = secAdminUsernames[i];
         var audit = new GlideRecord('sys_audit');
@@ -1319,18 +1493,22 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         audit.orderByDesc('sys_created_on');
         audit.setLimit(100);
         audit.query();
+
         while (audit.next()) {
             var tableModified = audit.tablename.toString();
             var recordId = audit.documentkey.toString();
             var recordName = '';
+
             var encRecord = new GlideRecord(tableModified);
             if (encRecord.get(recordId)) {
                 recordName = encRecord.name.toString();
             }
+
             var fieldChanged = audit.fieldname.toString();
             var oldValue = audit.oldvalue.toString();
             var newValue = audit.newvalue.toString();
             var isDeactivation = (fieldChanged === 'active' && oldValue === '1' && newValue === '0');
+
             var isHighRisk = false;
             for (var j = 0; j < highRiskTables.length; j++) {
                 if (tableModified === highRiskTables[j]) {
@@ -1339,41 +1517,78 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
                 }
             }
 
+
+
 			var encryptionAuditObj = {
                 timestamp: audit.sys_created_on.toString(),
                 changed_by: uname,
                 changed_by_display: secAdminUsers[uname],
                 table: tableModified,
                 record_name: recordName,
+				record_id: recordId,
                 field_changed: fieldChanged,
                 old_value: oldValue,
                 new_value: newValue,
                 is_deactivation: isDeactivation,
                 is_high_risk_table: isHighRisk
             };
+
             encryptionChanges.push(encryptionAuditObj);
-			engine.finding.setCurrentSource(encRecord);
-			engine.finding.setValue('finding_details',JSON.stringify(encryptionAuditObj,null,4));
-			engine.finding.increment();
+
+			// engine.finding.setCurrentSource(encRecord);
+			// engine.finding.setValue('finding_details',JSON.stringify(encryptionAuditObj,null,4));
+			// engine.finding.increment();
+
         }
     }
+
     var deactivations = [];
     var highRiskChanges = [];
     var otherChanges = [];
+
     for (var k = 0; k < encryptionChanges.length; k++) {
         if (encryptionChanges[k].is_deactivation) {
-            deactivations.push(encryptionChanges[k]);
+
+			deactivations.push(encryptionChanges[k]);
+
+			var changeRec = new GlideRecord(encryptionChanges[k].table);
+			if(changeRec.get(encryptionChanges[k].record_id)){
+				engine.finding.setCurrentSource(changeRec);
+			}
+			engine.finding.setValue('finding_details','DEACTIVATION on security layer\n'+JSON.stringify(encryptionChanges[k],null,4));
+			engine.finding.increment();
+
         } else if (encryptionChanges[k].is_high_risk_table) {
+
             highRiskChanges.push(encryptionChanges[k]);
+
+			var highRiskRec = new GlideRecord(encryptionChanges[k].table);
+			if(highRiskRec.get(encryptionChanges[k].record_id)){
+				engine.finding.setCurrentSource(highRiskRec);
+			}
+			engine.finding.setValue('finding_details','HIGH RISK CHANGE on security layer\n'+JSON.stringify(encryptionChanges[k],null,4));
+			engine.finding.increment();
+
         } else {
+
             otherChanges.push(encryptionChanges[k]);
+
+			var otherChangeRec = new GlideRecord(encryptionChanges[k].table);
+			if(otherChangeRec.get(encryptionChanges[k].record_id)){
+				engine.finding.setCurrentSource(otherChangeRec);
+			}
+			engine.finding.setValue('finding_details','Other change found on security layer\n'+JSON.stringify(encryptionChanges[k],null,4));
+			engine.finding.increment();
+
         }
     }
-    gs.info('Total encryption changes by security_admin users (last 30 days): ' + encryptionChanges.length);
-    gs.info('Deactivation events: ' + deactivations.length);
-    gs.info('High risk table changes (sys_kmf_map, sys_kmf_key, sys_kmf_crypto_module): ' + highRiskChanges.length);
-    gs.info('Other encryption changes: ' + otherChanges.length);
-    gs.info(JSON.stringify(encryptionChanges, null, 2));
+
+    // gs.info('Total encryption changes by security_admin users (last 30 days): ' + encryptionChanges.length);
+    // gs.info('Deactivation events: ' + deactivations.length);
+    // gs.info('High risk table changes (sys_kmf_map, sys_kmf_key, sys_kmf_crypto_module): ' + highRiskChanges.length);
+    // gs.info('Other encryption changes: ' + otherChanges.length);
+    // gs.info(JSON.stringify(encryptionChanges, null, 2));
+
 })(engine);
 ```
 
@@ -1392,14 +1607,18 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     // Audit active OAuth applications and their token lifespans
     var oauthEntity = new GlideRecord('oauth_entity');
     oauthEntity.addQuery('active', 'true');
     oauthEntity.query();
+
     var oauthApps = [];
     while (oauthEntity.next()) {
+
 		engine.finding.setCurrentSource(oauthEntity);
 		engine.finding.increment();
+
         oauthApps.push({
             name: oauthEntity.name.toString(),
             client_id: oauthEntity.client_id.toString(),
@@ -1408,7 +1627,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             refresh_token_lifespan: oauthEntity.refresh_token_lifespan.toString()
         });
     }
+
     //gs.info('Active OAuth applications: ' + JSON.stringify(oauthApps, null, 2));
+
 })(engine);
 ```
 
@@ -1430,8 +1651,10 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 ```javascript
 (function(engine) {
 
+
     var riskyACLs = [];
     var aclsWithRoles = {};
+
     // Build lookup of ACLs that have role restrictions to avoid N+1 query overhead
     var aclRoleEntry = new GlideRecord('sys_security_acl_role');
     aclRoleEntry.addNotNullQuery('sys_security_acl');
@@ -1439,6 +1662,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     while (aclRoleEntry.next()) {
         aclsWithRoles[aclRoleEntry.sys_security_acl.toString()] = true;
     }
+
     // Query active ACLs with no condition and no script
     var aclRecord = new GlideRecord('sys_security_acl');
     aclRecord.addQuery('active', 'true');
@@ -1446,16 +1670,21 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     aclRecord.addNullQuery('script');
     aclRecord.addQuery('sys_policy', '!=', 'read'); // Exclude read-only locked OOB records
     aclRecord.query();
+
     while (aclRecord.next()) {
         var sysId = aclRecord.sys_id.toString();
+
         // Skip ACLs that have role restrictions
         if (aclsWithRoles[sysId]) {
             continue;
         }
+
         var operation = aclRecord.operation.toString();
         var riskLevel = 'LOW';
+
 		engine.finding.setCurrentSource(aclRecord);
 		engine.finding.increment();
+
 
         if (operation === '*') {
             riskLevel = 'CRITICAL'; // Wildcard operation with no controls whatsoever
@@ -1464,6 +1693,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         } else if (operation === 'read') {
             riskLevel = 'MEDIUM';
         }
+
         riskyACLs.push({
             sys_id: sysId,
             name: aclRecord.name.toString(),
@@ -1475,6 +1705,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             sys_update_name: aclRecord.sys_update_name.toString()
         });
     }
+
     // Sort by risk level for triage
     var riskOrder = {
         'CRITICAL': 0,
@@ -1485,6 +1716,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     riskyACLs.sort(function(a, b) {
         return riskOrder[a.risk_level] - riskOrder[b.risk_level];
     });
+
     // gs.info('=== OVERLY PERMISSIVE ACL SCAN ===');
     // gs.info('Total findings: ' + riskyACLs.length);
     // gs.info('CRITICAL: ' + riskyACLs.filter(function(a) {
@@ -1500,6 +1732,8 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     //     return a.risk_level === 'LOW';
     // }).length);
     // gs.info('Full results: ' + JSON.stringify(riskyACLs, null, 2));
+
+
 
 })(engine);
 ```
@@ -1519,6 +1753,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function (engine) {
+
 
     var patterns = {
         UNCONDITIONAL_GRANT: [
@@ -1547,36 +1782,46 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             'hardcoded'
         ]
     };
+
     var concernOrder = ['UNCONDITIONAL_GRANT', 'BYPASS_PATTERN', 'DYNAMIC_BEHAVIOR', 'INCOMPLETE_LOGIC'];
     var suspiciousACLs = {};
+
     var aclRecord = new GlideRecord('sys_security_acl');
     aclRecord.addQuery('active', 'true');
     aclRecord.addNotNullQuery('script');
     aclRecord.query();
+
     while (aclRecord.next()) {
         var script = aclRecord.script.toString();
         var scriptLower = script.toLowerCase().replace(/\s+/g, ' ');
         var sysId = aclRecord.sys_id.toString();
+
         var matchedPatterns = [];
         var highestConcern = null;
+
         for (var category in patterns) {
             var patternList = patterns[category];
             for (var i = 0; i < patternList.length; i++) {
                 if (scriptLower.indexOf(patternList[i]) > -1) {
+
                     matchedPatterns.push({
                         pattern: patternList[i],
                         category: category
                     });
+
                     if (highestConcern === null ||
                         concernOrder.indexOf(category) < concernOrder.indexOf(highestConcern)) {
                         highestConcern = category;
                     }
+
 					engine.finding.setCurrentSource(aclRecord);
-					engine.finding.setValue('finding_details', JSON.stringify(matchedPatterns));
+					engine.finding.setValue('finding_details', 'Pattern:'+patternList[i]+' Category:'+category);
 					engine.finding.increment();
+
                 }
             }
         }
+
         if (matchedPatterns.length > 0) {
             suspiciousACLs[sysId] = {
                 sys_id: sysId,
@@ -1592,6 +1837,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             };
         }
     }
+
     var results = [];
     for (var id in suspiciousACLs) {
         results.push(suspiciousACLs[id]);
@@ -1599,6 +1845,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     results.sort(function(a, b) {
         return concernOrder.indexOf(a.highest_concern) - concernOrder.indexOf(b.highest_concern);
     });
+
     // gs.info('=== ACL DANGEROUS SCRIPT SCAN ===');
     // gs.info('Total findings: ' + results.length);
     // gs.info('Unconditional grants: ' + results.filter(function(a) { return a.highest_concern === 'UNCONDITIONAL_GRANT'; }).length);
@@ -1606,6 +1853,8 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     // gs.info('Dynamic behavior: ' + results.filter(function(a) { return a.highest_concern === 'DYNAMIC_BEHAVIOR'; }).length);
     // gs.info('Incomplete logic: ' + results.filter(function(a) { return a.highest_concern === 'INCOMPLETE_LOGIC'; }).length);
     // gs.info(JSON.stringify(results, null, 2));
+
+
 
 })(engine);
 ```
@@ -1625,23 +1874,1623 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     // Only runs if domain separation is enabled on the instance
+
 	var userRecord = new GlideRecord('sys_user');
 	userRecord.addQuery('active', 'true');
 	userRecord.addNullQuery('sys_domain'); // Users without domain assignment
 	userRecord.query();
+
 	var orphanedUsers = [];
 	while (userRecord.next()) {
+
 		engine.finding.setCurrentSource(userRecord);
 		engine.finding.setValue('finding_details','User is active and has no domain assignment.');
 		engine.finding.increment();
+
 		orphanedUsers.push({
 			user: userRecord.user_name.toString(),
 			name: userRecord.name.toString()
 		});
 	}
+
 	//gs.warn('Users without domain assignment: ' + JSON.stringify(orphanedUsers, null, 2));
    
+
+})(engine);
+```
+
+</details>
+
+---
+
+## Level Knowledge
+
+### glide.knowman.block_access_with_no_user_criteria must be set to true to block un
+
+**What:** Checks that the system property glide.knowman.block_access_with_no_user_criteria exists and is set to true. When false (the legacy default on pre-Orlando instances), any knowledge base that lacks Can Read or Can Contribute user criteria is accessible to all users, including unauthenticated guests. AppOmni research found approximately 45% of tested enterprise instances were leaking KB data due to this and related misconfigurations. This is the single most important KB security property.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: glide.knowman.block_access_with_no_user_criteria
+ * Check ID: cstaces-11a
+ *
+ * Type:     Script Only
+ * Category: KB Security — System Properties
+ * Severity: Critical
+ *
+ * Checks that glide.knowman.block_access_with_no_user_criteria is set to 'true'.
+ * When false (default on pre-Orlando instances), any KB without explicit
+ * user criteria is accessible to ALL users — including unauthenticated/guest.
+ *
+ * This is the #1 root cause of KB data exposures per AppOmni's 2024 research
+ * (45% of tested enterprise instances were leaking KB data).
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    var PROP_NAME = 'glide.knowman.block_access_with_no_user_criteria';
+    var finding = false;
+    var detail = '';
+
+    var propRec = new GlideRecord('sys_properties');
+    propRec.addQuery('name', PROP_NAME);
+    propRec.query();
+
+    if (propRec.next()) {
+        if (propRec.getValue('value') !== 'true') {
+            finding = true;
+            detail = 'Property "' + PROP_NAME + '" is set to "' + propRec.getValue('value') +
+                '". This means knowledge bases without user criteria are accessible to ALL users, ' +
+                'including unauthenticated guests. Set this property to "true" immediately.';
+        }
+    } else {
+        // Property does not exist — treat as false (the insecure default)
+        finding = true;
+        detail = 'Property "' + PROP_NAME + '" does not exist on this instance. ' +
+            'The default behavior is to allow access to KBs with no user criteria. ' +
+            'Create this property and set it to "true".';
+    }
+
+    if (finding) {
+        engine.finding.setCurrentSource(propRec);
+        engine.finding.setValue('finding_details', detail);
+        engine.finding.increment();
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### glide.knowman.apply_article_read_criteria must be true so that article-level use
+
+**What:** Checks that glide.knowman.apply_article_read_criteria is set to true. When false (the default), users with Can Contribute access at the KB level bypass ALL article-level Can Read and Cannot Read user criteria. This defeats the purpose of setting article-level restrictions for sensitive content within a shared knowledge base and is a prerequisite for effective article-level access segmentation.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: glide.knowman.apply_article_read_criteria
+ * Check ID: cstaces-11b
+ *
+ * Type:     Script Only
+ * Category: KB Security — System Properties
+ * Severity: High
+ *
+ * Checks that glide.knowman.apply_article_read_criteria is set to 'true'.
+ * When false (default), users with KB-level "Can Contribute" access bypass
+ * ALL article-level "Can Read" and "Cannot Read" user criteria.
+ *
+ * This defeats article-level access segmentation within a shared KB.
+ *
+ * Reference: https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0966771
+ */
+
+(function(engine) {
+
+    var PROP_NAME = 'glide.knowman.apply_article_read_criteria';
+    var finding = false;
+    var detail = '';
+
+    var propRec = new GlideRecord('sys_properties');
+    propRec.addQuery('name', PROP_NAME);
+    propRec.query();
+
+    if (propRec.next()) {
+        if (propRec.getValue('value') !== 'true') {
+            finding = true;
+            detail = 'Property "' + PROP_NAME + '" is set to "' + propRec.getValue('value') +
+                '". Contributors to a KB can read ALL articles regardless of article-level ' +
+                'user criteria restrictions. Set to "true" if you use article-level access controls.';
+        }
+    } else {
+        finding = true;
+        detail = 'Property "' + PROP_NAME + '" does not exist. ' +
+            'Default behavior allows KB contributors to bypass article-level read restrictions. ' +
+            'Create this property and set it to "true".';
+    }
+
+    if (finding) {
+        engine.finding.setCurrentSource(propRec);
+        engine.finding.setValue('finding_details', detail);
+        engine.finding.increment();
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### glide.knowman.search.apply_role_based_security must be true to enforce role-base
+
+**What:** Checks that glide.knowman.search.apply_role_based_security is set to true. When false or missing, role-based access checks on the roles field of kb_knowledge articles are bypassed during search. Articles with role restrictions may appear in search results for users who should not see them. This property must be manually created on many instances.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: glide.knowman.search.apply_role_based_security
+ * Check ID: cstaces-11c
+ *
+ * Type:     Script Only
+ * Category: KB Security — System Properties
+ * Severity: High
+ *
+ * Checks that glide.knowman.search.apply_role_based_security is set to 'true'.
+ * When false, role-based access checks on the 'roles' field of kb_knowledge
+ * articles are bypassed during search, potentially leaking restricted articles
+ * in search results.
+ *
+ * Reference: https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0824545
+ */
+
+(function(engine) {
+
+    var PROP_NAME = 'glide.knowman.search.apply_role_based_security';
+    var finding = false;
+    var detail = '';
+
+    var propRec = new GlideRecord('sys_properties');
+    propRec.addQuery('name', PROP_NAME);
+    propRec.query();
+
+    if (propRec.next()) {
+        if (propRec.getValue('value') !== 'true') {
+            finding = true;
+            detail = 'Property "' + PROP_NAME + '" is set to "' + propRec.getValue('value') +
+                '". Role-based security on KB articles is not enforced during search. ' +
+                'Articles with role restrictions may appear in search results for unauthorized users. ' +
+                'Set to "true".';
+        }
+    } else {
+        finding = true;
+        detail = 'Property "' + PROP_NAME + '" does not exist. ' +
+            'This property may need to be manually created on some instances. ' +
+            'Without it, role-based article restrictions are not enforced during search.';
+    }
+
+    if (finding) {
+        engine.finding.setCurrentSource(propRec);
+        engine.finding.setValue('finding_details', detail);
+        engine.finding.increment();
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### glide.knowman.show_unpublished must not be true to prevent draft and review-stat
+
+**What:** Checks that glide.knowman.show_unpublished is not set to true. When enabled, articles in Draft, Review, or other non-Published workflow states are visible in the Knowledge portal and search results. Unpublished articles may contain sensitive information that has not been reviewed or approved, bypassing the editorial and approval workflow.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: glide.knowman.show_unpublished
+ * Check ID: cstaces-11d
+ *
+ * Type:     Script Only
+ * Category: KB Security — System Properties
+ * Severity: High
+ *
+ * Checks that glide.knowman.show_unpublished is NOT set to 'true'.
+ * When true, articles in Draft, Review, or other non-Published workflow states
+ * are visible in the Knowledge portal and search results.
+ *
+ * Unpublished articles may contain sensitive, unreviewed content.
+ */
+
+(function(engine) {
+
+    var PROP_NAME = 'glide.knowman.show_unpublished';
+
+    var propRec = new GlideRecord('sys_properties');
+    propRec.addQuery('name', PROP_NAME);
+    propRec.query();
+
+    if (propRec.next()) {
+        if (propRec.getValue('value') === 'true') {
+            engine.finding.setCurrentSource(propRec);
+            engine.finding.setValue('finding_details',
+                'Property "' + PROP_NAME + '" is set to "true". ' +
+                'Draft, review, and other non-published articles are visible in the Knowledge portal ' +
+                'and search results. This bypasses the editorial/approval workflow and may leak ' +
+                'sensitive content before it has been reviewed. Set to "false".');
+            engine.finding.increment();
+        }
+    }
+    // If property does not exist, default is false (secure) — no finding
+
+})(engine);
+```
+
+</details>
+
+---
+
+### glide.knowman.section.view_roles.draft should be restricted to knowledge managem
+
+**What:** Checks that glide.knowman.section.view_roles.draft is not set to overly permissive roles such as itil, snc_internal, employee, or left empty. This property controls which roles can see articles in Draft state. If set to a common role, draft articles containing incomplete or sensitive information become visible to a broad audience before editorial review and approval.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: glide.knowman.section.view_roles.draft
+ * Check ID: cstaces-11e
+ *
+ * Type:     Script Only
+ * Category: KB Security — System Properties
+ * Severity: Medium
+ *
+ * Checks that glide.knowman.section.view_roles.draft is not overly permissive.
+ * If set to a common role (like 'itil') or left empty, draft articles are
+ * visible to a broad audience before they've been reviewed and approved.
+ *
+ * Expected: Restrictive roles like 'knowledge' or 'knowledge_admin'.
+ */
+
+(function(engine) {
+
+    var PROP_NAME = 'glide.knowman.section.view_roles.draft';
+    var BROAD_ROLES = ['itil', 'snc_internal', 'employee', ''];
+
+    var propRec = new GlideRecord('sys_properties');
+    propRec.addQuery('name', PROP_NAME);
+    propRec.query();
+
+    if (propRec.next()) {
+        var val = propRec.getValue('value') || '';
+        var roles = val.split(',');
+        var broadFound = [];
+
+        for (var i = 0; i < roles.length; i++) {
+            var role = roles[i].trim().toLowerCase();
+            if (BROAD_ROLES.indexOf(role) >= 0) {
+                broadFound.push(role || '(empty)');
+            }
+        }
+
+        if (broadFound.length > 0 || val === '') {
+            engine.finding.setCurrentSource(propRec);
+            engine.finding.setValue('finding_details',
+                'Property "' + PROP_NAME + '" contains overly permissive role(s): ' +
+                broadFound.join(', ') + '. Draft articles may be visible to a wide audience ' +
+                'before editorial review. Restrict to knowledge management roles ' +
+                '(e.g., "knowledge" or "knowledge_admin").');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Active knowledge bases must have at least one Can Read user criteria to explicit
+
+**What:** Identifies active knowledge bases with no Can Read user criteria configured. Without explicit read criteria, access depends entirely on the glide.knowman.block_access_with_no_user_criteria system property. If that property is false, these KBs are accessible to everyone including unauthenticated guests. Every KB should have explicit Can Read criteria as a defense-in-depth measure.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: KBs with no "Can Read" user criteria
+ * Check ID: cstaces-11f
+ *
+ * Type:     Script Only
+ * Category: KB Security — Access Control
+ * Severity: Critical
+ *
+ * Identifies active knowledge bases that have no "Can Read" user criteria.
+ * Without explicit read criteria, access depends entirely on the
+ * glide.knowman.block_access_with_no_user_criteria property. If that
+ * property is false, these KBs are accessible to everyone including guests.
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    // Discover M2M table for "Can Read" criteria
+    var M2M_CANDIDATES = [
+        'kb_uc_can_read_mtom',
+        'm2m_kb_uc_can_read',
+        'kb_uc_can_read_m2m'
+    ];
+    var m2mTable = '';
+    for (var c = 0; c < M2M_CANDIDATES.length; c++) {
+        var test = new GlideRecord(M2M_CANDIDATES[c]);
+        if (test.isValid()) {
+            m2mTable = M2M_CANDIDATES[c];
+            break;
+        }
+    }
+
+    // Build set of KB sys_ids that have at least one "Can Read" criteria
+    var kbsWithCriteria = {};
+
+    if (m2mTable) {
+        // Strategy 1: M2M table
+        var m2mRec = new GlideRecord(m2mTable);
+        m2mRec.query();
+        while (m2mRec.next()) {
+            // M2M table has a reference to kb_knowledge_base — field name varies
+            var kbRef = m2mRec.getValue('kb_knowledge_base') || m2mRec.getValue('kb_knowledge_base_id') || '';
+            if (kbRef) {
+                kbsWithCriteria[kbRef] = true;
+            }
+        }
+    }
+
+    // Strategy 2: Check Glide List field on kb_knowledge_base (fallback/supplement)
+    var kbListRec = new GlideRecord('kb_knowledge_base');
+    kbListRec.addActiveQuery();
+    kbListRec.addNotNullQuery('u_can_read_user_criteria');
+    kbListRec.query();
+    while (kbListRec.next()) {
+        kbsWithCriteria[kbListRec.getUniqueValue()] = true;
+    }
+
+    // Now find active KBs NOT in the set
+    var kbRec = new GlideRecord('kb_knowledge_base');
+    kbRec.addActiveQuery();
+    kbRec.query();
+
+    while (kbRec.next()) {
+        var kbId = kbRec.getUniqueValue();
+        if (!kbsWithCriteria[kbId]) {
+            engine.finding.setCurrentSource(kbRec);
+            engine.finding.setValue('finding_details',
+                'Knowledge Base "' + kbRec.getValue('title') + '" (' + kbRec.getValue('kb_version') +
+                ') has no "Can Read" user criteria. If glide.knowman.block_access_with_no_user_criteria ' +
+                'is false, this KB is accessible to ALL users including unauthenticated guests. ' +
+                'Add explicit "Can Read" user criteria.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Active knowledge bases should have Cannot Read user criteria to explicitly deny 
+
+**What:** Identifies active knowledge bases with no Cannot Read user criteria (deny list). Without a Cannot Read denylist, there is no explicit block for unauthenticated or guest users. The Guest User Business Rule should automatically add Guest to Cannot Read on new KBs, but older KBs or KBs created when the Business Rule was inactive will lack this protection. Cannot always overrides Can in user criteria evaluation, making denylists a critical defense-in-depth layer.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: KBs with no "Cannot Read" user criteria
+ * Check ID: cstaces-11g
+ *
+ * Type:     Script Only
+ * Category: KB Security — Access Control
+ * Severity: High
+ *
+ * Identifies active knowledge bases that have no "Cannot Read" user criteria.
+ * Without a deny list, there is no explicit block for unauthenticated/guest users.
+ * "Cannot" always overrides "Can" in user criteria evaluation, making deny lists
+ * a critical defense-in-depth layer.
+ *
+ * The Guest User Business Rule (sys_id 6c8ec5147711111016f35c207b5a9969) only
+ * applies to newly created KBs; older KBs may lack this protection.
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    var M2M_CANDIDATES = [
+        'kb_uc_cannot_read_mtom',
+        'm2m_kb_uc_cannot_read',
+        'kb_uc_cannot_read_m2m'
+    ];
+    var m2mTable = '';
+    for (var c = 0; c < M2M_CANDIDATES.length; c++) {
+        var test = new GlideRecord(M2M_CANDIDATES[c]);
+        if (test.isValid()) {
+            m2mTable = M2M_CANDIDATES[c];
+            break;
+        }
+    }
+
+    var kbsWithCriteria = {};
+
+    if (m2mTable) {
+        var m2mRec = new GlideRecord(m2mTable);
+        m2mRec.query();
+        while (m2mRec.next()) {
+            var kbRef = m2mRec.getValue('kb_knowledge_base') || m2mRec.getValue('kb_knowledge_base_id') || '';
+            if (kbRef) {
+                kbsWithCriteria[kbRef] = true;
+            }
+        }
+    }
+
+    var kbListRec = new GlideRecord('kb_knowledge_base');
+    kbListRec.addActiveQuery();
+    kbListRec.addNotNullQuery('u_cannot_read_user_criteria');
+    kbListRec.query();
+    while (kbListRec.next()) {
+        kbsWithCriteria[kbListRec.getUniqueValue()] = true;
+    }
+
+    var kbRec = new GlideRecord('kb_knowledge_base');
+    kbRec.addActiveQuery();
+    kbRec.query();
+
+    while (kbRec.next()) {
+        if (!kbsWithCriteria[kbRec.getUniqueValue()]) {
+            engine.finding.setCurrentSource(kbRec);
+            engine.finding.setValue('finding_details',
+                'Knowledge Base "' + kbRec.getValue('title') + '" has no "Cannot Read" user criteria (deny list). ' +
+                'Without an explicit deny, there is no fallback block for guest/unauthenticated users. ' +
+                'Add a "Cannot Read" user criteria that includes the Guest user at minimum.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Active knowledge bases with empty Can Contribute criteria implicitly allow all a
+
+**What:** Identifies active knowledge bases where the Can Contribute user criteria is empty. When Can Contribute is empty, ALL authenticated users implicitly gain contribute access, meaning any user can create, modify, or retire articles. Since contribute access implies read access by default (unless glide.knowman.apply_article_read_criteria is true), this also bypasses article-level Can Read and Cannot Read restrictions.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: KBs with no "Can Contribute" user criteria
+ * Check ID: cstaces-11h
+ *
+ * Type:     Script Only
+ * Category: KB Security — Access Control
+ * Severity: Critical
+ *
+ * Identifies active knowledge bases with no "Can Contribute" user criteria.
+ * When empty, ALL authenticated users implicitly gain contribute access, which:
+ *   1. Allows any user to create, modify, and retire articles
+ *   2. Grants implicit read access that bypasses article-level restrictions
+ *      (unless glide.knowman.apply_article_read_criteria = true)
+ *
+ * This is documented as a known issue in KB0623654.
+ *
+ * Reference: https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0623654
+ */
+
+(function(engine) {
+
+    var M2M_CANDIDATES = [
+        'kb_uc_can_contribute_mtom',
+        'm2m_kb_uc_can_contribute',
+        'kb_uc_can_contribute_m2m'
+    ];
+    var m2mTable = '';
+    for (var c = 0; c < M2M_CANDIDATES.length; c++) {
+        var test = new GlideRecord(M2M_CANDIDATES[c]);
+        if (test.isValid()) {
+            m2mTable = M2M_CANDIDATES[c];
+            break;
+        }
+    }
+
+    var kbsWithCriteria = {};
+
+    if (m2mTable) {
+        var m2mRec = new GlideRecord(m2mTable);
+        m2mRec.query();
+        while (m2mRec.next()) {
+            var kbRef = m2mRec.getValue('kb_knowledge_base') || m2mRec.getValue('kb_knowledge_base_id') || '';
+            if (kbRef) {
+                kbsWithCriteria[kbRef] = true;
+            }
+        }
+    }
+
+    var kbListRec = new GlideRecord('kb_knowledge_base');
+    kbListRec.addActiveQuery();
+    kbListRec.addNotNullQuery('u_can_contribute_user_criteria');
+    kbListRec.query();
+    while (kbListRec.next()) {
+        kbsWithCriteria[kbListRec.getUniqueValue()] = true;
+    }
+
+    var kbRec = new GlideRecord('kb_knowledge_base');
+    kbRec.addActiveQuery();
+    kbRec.query();
+
+    while (kbRec.next()) {
+        if (!kbsWithCriteria[kbRec.getUniqueValue()]) {
+            engine.finding.setCurrentSource(kbRec);
+            engine.finding.setValue('finding_details',
+                'Knowledge Base "' + kbRec.getValue('title') + '" has no "Can Contribute" user criteria. ' +
+                'When empty, ALL authenticated users implicitly gain contribute access — they can create, ' +
+                'modify, and retire articles. Contribute access also bypasses article-level read restrictions ' +
+                'unless glide.knowman.apply_article_read_criteria is true. Define explicit contribute criteria.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Knowledge bases must not use the built-in Any User or Any user for kb criteria i
+
+**What:** Identifies knowledge bases where the Can Read user criteria includes the built-in Any User or Any user for kb user criteria records. These built-in records match ALL users including unauthenticated and guest users. Administrators commonly mistake them for all authenticated employees when they actually permit unauthenticated access. This was one of the three root cause scenarios identified by AppOmni for KB data exposures.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: KBs using "Any User" or "Any user for kb" in Can Read
+ * Check ID: cstaces-11i
+ *
+ * Type:     Script Only
+ * Category: KB Security — Access Control
+ * Severity: Critical
+ *
+ * Identifies knowledge bases where "Can Read" includes the built-in
+ * "Any User" or "Any user for kb" user criteria records. These match
+ * ALL users including unauthenticated/guest — administrators commonly
+ * mistake them for "all authenticated employees."
+ *
+ * This was one of three root cause scenarios for KB data exposure per AppOmni.
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    // Find the "Any User" and "Any user for kb" user criteria records
+    var dangerousCriteria = {};
+    var ucRec = new GlideRecord('user_criteria');
+    ucRec.addEncodedQuery('nameINAny User,Any user for kb');
+    ucRec.query();
+    while (ucRec.next()) {
+        dangerousCriteria[ucRec.getUniqueValue()] = ucRec.getValue('name');
+    }
+
+    if (Object.keys(dangerousCriteria).length === 0) {
+        return; // No dangerous criteria records found on this instance
+    }
+
+    // Check M2M tables for "Can Read" relationships
+    var M2M_CANDIDATES = [
+        'kb_uc_can_read_mtom',
+        'm2m_kb_uc_can_read',
+        'kb_uc_can_read_m2m'
+    ];
+    var m2mTable = '';
+    for (var c = 0; c < M2M_CANDIDATES.length; c++) {
+        var test = new GlideRecord(M2M_CANDIDATES[c]);
+        if (test.isValid()) {
+            m2mTable = M2M_CANDIDATES[c];
+            break;
+        }
+    }
+
+    var flaggedKBs = {}; // kbId -> criteriaName
+
+    if (m2mTable) {
+        var m2mRec = new GlideRecord(m2mTable);
+        m2mRec.query();
+        while (m2mRec.next()) {
+            var ucRef = m2mRec.getValue('user_criteria') || m2mRec.getValue('user_criteria_id') || '';
+            var kbRef = m2mRec.getValue('kb_knowledge_base') || m2mRec.getValue('kb_knowledge_base_id') || '';
+            if (ucRef && kbRef && dangerousCriteria[ucRef]) {
+                flaggedKBs[kbRef] = dangerousCriteria[ucRef];
+            }
+        }
+    }
+
+    // Report findings
+    for (var kbId in flaggedKBs) {
+        var kbRec = new GlideRecord('kb_knowledge_base');
+        if (kbRec.get(kbId) && kbRec.getValue('active') === 'true') {
+            engine.finding.setCurrentSource(kbRec);
+            engine.finding.setValue('finding_details',
+                'Knowledge Base "' + kbRec.getValue('title') + '" uses "' + flaggedKBs[kbId] +
+                '" in its "Can Read" user criteria. This built-in criteria matches ALL users ' +
+                'including unauthenticated guests. Replace with a criteria targeting specific ' +
+                'roles or groups (e.g., all employees via a common role like snc_internal).');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### The Guest user must be included in a Cannot Read user criteria on every active k
+
+**What:** Identifies active knowledge bases where the Guest user is not included in any Cannot Read user criteria. If Guest is not explicitly denied and other conditions permit access (such as Any User in Can Read or no user criteria at all), unauthenticated users can view KB content. User criteria prioritizes Deny over Allow, so having Guest in Cannot Read is a critical safety net even if Can Read accidentally includes broad criteria.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: Guest user not in "Cannot Read" for non-public KBs
+ * Check ID: cstaces-11j
+ *
+ * Type:     Script Only
+ * Category: KB Security — Access Control
+ * Severity: High
+ *
+ * Identifies active knowledge bases where the Guest user is not included
+ * in any "Cannot Read" user criteria. Since "Cannot" overrides "Can" in
+ * ServiceNow's evaluation, having Guest in "Cannot Read" is a critical
+ * safety net even if "Can Read" accidentally includes broad criteria.
+ *
+ * The OOB Business Rule (sys_id 6c8ec5147711111016f35c207b5a9969) adds
+ * Guest to Cannot Read on new KBs, but older KBs may lack this protection.
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    // Find the Guest user sys_id
+    var guestId = '';
+    var guestRec = new GlideRecord('sys_user');
+    guestRec.addQuery('user_name', 'guest');
+    guestRec.query();
+    if (guestRec.next()) {
+        guestId = guestRec.getUniqueValue();
+    }
+    if (!guestId) {
+        return; // No guest user found
+    }
+
+    // Find all user criteria that include the Guest user
+    var criteriaWithGuest = {};
+    var ucRec = new GlideRecord('user_criteria');
+    ucRec.addQuery('users', 'CONTAINS', guestId);
+    ucRec.query();
+    while (ucRec.next()) {
+        criteriaWithGuest[ucRec.getUniqueValue()] = true;
+    }
+
+    // Check M2M tables for "Cannot Read" relationships
+    var M2M_CANDIDATES = [
+        'kb_uc_cannot_read_mtom',
+        'm2m_kb_uc_cannot_read',
+        'kb_uc_cannot_read_m2m'
+    ];
+    var m2mTable = '';
+    for (var c = 0; c < M2M_CANDIDATES.length; c++) {
+        var test = new GlideRecord(M2M_CANDIDATES[c]);
+        if (test.isValid()) {
+            m2mTable = M2M_CANDIDATES[c];
+            break;
+        }
+    }
+
+    var kbsProtected = {};
+
+    if (m2mTable) {
+        var m2mRec = new GlideRecord(m2mTable);
+        m2mRec.query();
+        while (m2mRec.next()) {
+            var ucRef = m2mRec.getValue('user_criteria') || m2mRec.getValue('user_criteria_id') || '';
+            var kbRef = m2mRec.getValue('kb_knowledge_base') || m2mRec.getValue('kb_knowledge_base_id') || '';
+            if (ucRef && kbRef && criteriaWithGuest[ucRef]) {
+                kbsProtected[kbRef] = true;
+            }
+        }
+    }
+
+    // Find active KBs that are NOT protected
+    var kbRec = new GlideRecord('kb_knowledge_base');
+    kbRec.addActiveQuery();
+    kbRec.query();
+
+    while (kbRec.next()) {
+        if (!kbsProtected[kbRec.getUniqueValue()]) {
+            engine.finding.setCurrentSource(kbRec);
+            engine.finding.setValue('finding_details',
+                'Knowledge Base "' + kbRec.getValue('title') + '" does not have the Guest user in any ' +
+                '"Cannot Read" user criteria. Without an explicit Guest deny, unauthenticated users ' +
+                'may access this KB if other conditions allow it (e.g., "Any User" in Can Read, or ' +
+                'no user criteria at all). Add Guest to a "Cannot Read" user criteria on this KB.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Knowledge bases with Can Contribute set but no Can Read criteria create a danger
+
+**What:** Identifies KBs where Can Contribute is configured but Can Read is empty. This is a dangerous misconfiguration: when glide.knowman.block_access_with_no_user_criteria is true, it only blocks access when NEITHER Can Read NOR Can Contribute is set. If Can Contribute exists (even narrowly), the system considers the KB to have criteria and will NOT block access. Since no Can Read restriction exists, unauthenticated users may still read all articles.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: KBs with "Can Contribute" set but no "Can Read"
+ * Check ID: cstaces-11k
+ *
+ * Type:     Script Only
+ * Category: KB Security — Access Control
+ * Severity: Critical
+ *
+ * Identifies KBs where "Can Contribute" is configured but "Can Read" is empty.
+ * This is a dangerous misconfiguration: when block_access_with_no_user_criteria
+ * is true, it only blocks when NEITHER Can Read NOR Can Contribute is set.
+ * If Can Contribute exists (even narrowly), the property considers the KB to
+ * have criteria — so it does NOT block unauthenticated read access when
+ * Can Read is missing.
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    // Discover M2M tables
+    var readCandidates = ['kb_uc_can_read_mtom', 'm2m_kb_uc_can_read', 'kb_uc_can_read_m2m'];
+    var contribCandidates = ['kb_uc_can_contribute_mtom', 'm2m_kb_uc_can_contribute', 'kb_uc_can_contribute_m2m'];
+
+    function findM2M(candidates) {
+        for (var i = 0; i < candidates.length; i++) {
+            var t = new GlideRecord(candidates[i]);
+            if (t.isValid()) return candidates[i];
+        }
+        return '';
+    }
+
+    var readM2M = findM2M(readCandidates);
+    var contribM2M = findM2M(contribCandidates);
+
+    // Build sets
+    var kbsWithRead = {};
+    var kbsWithContrib = {};
+
+    function loadKBs(tableName, targetSet) {
+        if (!tableName) return;
+        var m2mRec = new GlideRecord(tableName);
+        m2mRec.query();
+        while (m2mRec.next()) {
+            var kbRef = m2mRec.getValue('kb_knowledge_base') || m2mRec.getValue('kb_knowledge_base_id') || '';
+            if (kbRef) targetSet[kbRef] = true;
+        }
+    }
+
+    loadKBs(readM2M, kbsWithRead);
+    loadKBs(contribM2M, kbsWithContrib);
+
+    // Find KBs with contribute but no read
+    var kbRec = new GlideRecord('kb_knowledge_base');
+    kbRec.addActiveQuery();
+    kbRec.query();
+
+    while (kbRec.next()) {
+        var kbId = kbRec.getUniqueValue();
+        if (kbsWithContrib[kbId] && !kbsWithRead[kbId]) {
+            engine.finding.setCurrentSource(kbRec);
+            engine.finding.setValue('finding_details',
+                'Knowledge Base "' + kbRec.getValue('title') + '" has "Can Contribute" user criteria defined ' +
+                'but no "Can Read" user criteria. This is a dangerous gap: the ' +
+                'glide.knowman.block_access_with_no_user_criteria property considers this KB to have ' +
+                'criteria (because Can Contribute exists) and will NOT block access — but no Can Read ' +
+                'restriction exists, so unauthenticated users may still read articles. ' +
+                'Add explicit "Can Read" user criteria.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Knowledge bases created before mid-2022 lack automatic Guest user denial and mus
+
+**What:** Identifies knowledge bases created before mid-2022 (when the Guest User Business Rule was introduced) that do not have the Guest user in any Cannot Read criteria. These are the highest-risk KBs for unintended public exposure since the automatic Guest denial protection was not applied retroactively. The Business Rule only protects newly created KBs.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: KBs created before mid-2022 without Guest deny
+ * Check ID: cstaces-11l
+ *
+ * Type:     Script Only
+ * Category: KB Security — Access Control
+ * Severity: High
+ *
+ * Identifies knowledge bases created before mid-2022 (when the Guest User
+ * Business Rule was introduced) that do not have Guest in their "Cannot Read"
+ * criteria. These are the highest-risk KBs for unintended public exposure
+ * since the automatic protection was not applied retroactively.
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    var CUTOFF_DATE = '2022-07-01 00:00:00';
+
+    // Find Guest user
+    var guestId = '';
+    var guestRec = new GlideRecord('sys_user');
+    guestRec.addQuery('user_name', 'guest');
+    guestRec.query();
+    if (guestRec.next()) guestId = guestRec.getUniqueValue();
+    if (!guestId) return;
+
+    // Find criteria that include Guest
+    var criteriaWithGuest = {};
+    var ucRec = new GlideRecord('user_criteria');
+    ucRec.addQuery('users', 'CONTAINS', guestId);
+    ucRec.query();
+    while (ucRec.next()) {
+        criteriaWithGuest[ucRec.getUniqueValue()] = true;
+    }
+
+    // Check Cannot Read M2M
+    var M2M_CANDIDATES = ['kb_uc_cannot_read_mtom', 'm2m_kb_uc_cannot_read', 'kb_uc_cannot_read_m2m'];
+    var m2mTable = '';
+    for (var c = 0; c < M2M_CANDIDATES.length; c++) {
+        var test = new GlideRecord(M2M_CANDIDATES[c]);
+        if (test.isValid()) { m2mTable = M2M_CANDIDATES[c]; break; }
+    }
+
+    var kbsProtected = {};
+    if (m2mTable) {
+        var m2mRec = new GlideRecord(m2mTable);
+        m2mRec.query();
+        while (m2mRec.next()) {
+            var ucRef = m2mRec.getValue('user_criteria') || m2mRec.getValue('user_criteria_id') || '';
+            var kbRef = m2mRec.getValue('kb_knowledge_base') || m2mRec.getValue('kb_knowledge_base_id') || '';
+            if (ucRef && kbRef && criteriaWithGuest[ucRef]) {
+                kbsProtected[kbRef] = true;
+            }
+        }
+    }
+
+    // Find pre-2022 KBs without Guest deny
+    var kbRec = new GlideRecord('kb_knowledge_base');
+    kbRec.addActiveQuery();
+    kbRec.addQuery('sys_created_on', '<', CUTOFF_DATE);
+    kbRec.query();
+
+    while (kbRec.next()) {
+        if (!kbsProtected[kbRec.getUniqueValue()]) {
+            engine.finding.setCurrentSource(kbRec);
+            engine.finding.setValue('finding_details',
+                'Knowledge Base "' + kbRec.getValue('title') + '" was created on ' +
+                kbRec.getValue('sys_created_on') + ' (before the Guest User Business Rule was introduced ' +
+                'in mid-2022) and does not have the Guest user in any "Cannot Read" user criteria. ' +
+                'This KB was not retroactively protected and is at elevated risk for unauthenticated ' +
+                'access. Add Guest to a "Cannot Read" user criteria immediately.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### The Guest User Business Rule that auto-denies Guest access on new KBs must remai
+
+**What:** Checks that the Business Rule (sys_id 6c8ec5147711111016f35c207b5a9969) which adds the Guest User to Cannot Read and Cannot Contribute user criteria when a new KB is created is active. If deactivated (e.g., during troubleshooting and never re-enabled), newly created knowledge bases will not automatically have Guest denied access, leaving them vulnerable to unauthenticated exposure.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: Guest User Business Rule is inactive
+ * Check ID: cstaces-11m
+ *
+ * Type:     Script Only
+ * Category: KB Security — Configuration
+ * Severity: High
+ *
+ * Checks that the OOB Business Rule (sys_id 6c8ec5147711111016f35c207b5a9969)
+ * which adds the Guest User to "Cannot Read" and "Cannot Contribute" on newly
+ * created KBs is active. If deactivated (e.g., during troubleshooting and
+ * never re-enabled), new KBs will not automatically be protected from
+ * unauthenticated access.
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    var BR_SYS_ID = '6c8ec5147711111016f35c207b5a9969';
+
+    var brRec = new GlideRecord('sys_script');
+    if (brRec.get(BR_SYS_ID)) {
+        if (brRec.getValue('active') !== '1') {
+            engine.finding.setCurrentSource(brRec);
+            engine.finding.setValue('finding_details',
+                'The Guest User Business Rule (sys_id ' + BR_SYS_ID + ') is INACTIVE. ' +
+                'This Business Rule automatically adds the Guest user to "Cannot Read" and ' +
+                '"Cannot Contribute" user criteria when a new Knowledge Base is created. ' +
+                'Without it, newly created KBs will not be protected from unauthenticated access. ' +
+                'Re-activate this Business Rule immediately.');
+            engine.finding.increment();
+        }
+    } else {
+        // BR doesn't exist — may be a very old instance or it was deleted
+        var brRec2 = new GlideRecord('sys_script');
+        brRec2.addQuery('sys_id', BR_SYS_ID);
+        brRec2.query();
+        engine.finding.setCurrentSource(brRec2);
+        engine.finding.setValue('finding_details',
+            'The Guest User Business Rule (sys_id ' + BR_SYS_ID + ') was not found on this instance. ' +
+            'This OOB rule adds Guest to "Cannot Read" and "Cannot Contribute" on new KBs. ' +
+            'It may not exist on older instances. Consider creating equivalent protection manually.');
+        engine.finding.increment();
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### KB endpoint pages (kb_view, kb_find, kb_home, kb_list) must not be listed in sys
+
+**What:** Checks the sys_public table for active records with KB-related page values: kb_comments, kb_find, kb_home, kb_list, and kb_view. Any active record means unauthenticated users can reach that Knowledge portal page without logging in. Even if user criteria restrict article content, public portal pages increase the attack surface and enable reconnaissance such as enumerating KB names and categories.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: KB pages listed in sys_public (public pages)
+ * Check ID: cstaces-11n
+ *
+ * Type:     Script Only
+ * Category: KB Security — Public Access
+ * Severity: High
+ *
+ * Checks the sys_public table for active records allowing unauthenticated
+ * access to Knowledge Base UI pages (kb_view, kb_find, kb_home, kb_list,
+ * kb_comments). Any active record means unauthenticated users can reach
+ * these pages without logging in.
+ *
+ * Reference: https://servicenowguru.com/system-definition/controlling-public-availability-knowledge-base-content/
+ */
+
+(function(engine) {
+
+    var KB_PAGES = ['kb_view', 'kb_find', 'kb_home', 'kb_list', 'kb_comments',
+                    'kb_article', 'kb_article_view', '$knowledge.do'];
+
+    var publicPageRec = new GlideRecord('sys_public');
+    publicPageRec.addActiveQuery();
+    publicPageRec.addQuery('page', 'IN', KB_PAGES.join(','));
+    publicPageRec.query();
+
+    while (publicPageRec.next()) {
+        engine.finding.setCurrentSource(publicPageRec);
+        engine.finding.setValue('finding_details',
+            'Public page "' + publicPageRec.getValue('page') + '" allows unauthenticated access to ' +
+            'Knowledge Base content. Attackers can access KB portal pages without logging in, ' +
+            'enabling article enumeration and data extraction. Remove this sys_public record ' +
+            'unless public KB access is intentionally required.');
+        engine.finding.increment();
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Service Portal KB widgets must not have the public flag enabled, which allows un
+
+**What:** Identifies Service Portal widgets with KB-related names where the public field is set to true, allowing unauthenticated access. AppOmni research showed that attackers can access misconfigured KBs through public widgets, including brute-forcing incremental KB article numbers (KB0000001, KB0000002, etc.) using the widget server-side API without authentication.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: KB Service Portal widgets marked as public
+ * Check ID: cstaces-11o
+ *
+ * Type:     Script Only
+ * Category: KB Security — Public Access
+ * Severity: High
+ *
+ * Checks for Service Portal widget instances related to Knowledge Base
+ * where the public flag is enabled, allowing unauthenticated access.
+ * AppOmni showed attackers can brute-force KB article IDs (KB0000001,
+ * KB0000002, etc.) via public KB Article Page widgets.
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    // Check sp_widget for public KB widgets
+    var KB_WIDGET_NAMES = [
+        'KB Article Page', 'KB View 2', 'KB Search', 'KB Category Page',
+        'Knowledge Base', 'Knowledge Article View'
+    ];
+
+    var widgetRec = new GlideRecord('sp_widget');
+    widgetRec.addQuery('name', 'IN', KB_WIDGET_NAMES.join(','));
+    widgetRec.addQuery('public', true);
+    widgetRec.query();
+
+    while (widgetRec.next()) {
+        engine.finding.setCurrentSource(widgetRec);
+        engine.finding.setValue('finding_details',
+            'Service Portal widget "' + widgetRec.getValue('name') + '" is marked as public. ' +
+            'Unauthenticated users can access KB content through this widget. ' +
+            'Attackers can brute-force KB article numbers (KB0000001, KB0000002, etc.) ' +
+            'to enumerate and extract articles. Uncheck the "Public" flag unless ' +
+            'public KB access is intentionally required.');
+        engine.finding.increment();
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### The sn_km_api Knowledge Management REST API must require authentication to preve
+
+**What:** Checks whether the sn_km_api Scripted REST Service requires authentication. The /api/sn_km_api/ API is public by default and does not require authentication. Any knowledge base that is publicly accessible becomes available for programmatic enumeration and download via this API without credentials. For version 1.0.1 and later, the API can be configured to require authentication.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: Knowledge Management REST API allows unauthenticated access
+ * Check ID: cstaces-11p
+ *
+ * Type:     Script Only
+ * Category: KB Security — API Access
+ * Severity: Critical
+ *
+ * Checks whether the sn_km_api (Knowledge Management REST API) is configured
+ * to require authentication. By default, this API is public and does not
+ * require authentication — any publicly accessible KB can be queried
+ * programmatically without credentials.
+ *
+ * Reference: https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0959663
+ */
+
+(function(engine) {
+
+    var apiRec = new GlideRecord('sys_ws_definition');
+    apiRec.addQuery('name', 'CONTAINS', 'Knowledge Management');
+    apiRec.addOrCondition('service_address', 'CONTAINS', 'sn_km_api');
+    apiRec.query();
+
+    while (apiRec.next()) {
+        if (apiRec.getValue('requires_authentication') !== 'true') {
+            engine.finding.setCurrentSource(apiRec);
+            engine.finding.setValue('finding_details',
+                'Scripted REST API "' + apiRec.getValue('name') + '" (' +
+                apiRec.getValue('service_address') + ') does not require authentication. ' +
+                'Any publicly accessible KB articles can be queried and downloaded via this API ' +
+                'without credentials. Enable "Requires Authentication" on this REST API definition. ' +
+                'See KB0959663 for guidance.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### ACLs on the kb_knowledge table must not be empty (no role, condition, script, or
+
+**What:** Identifies ACL records for the kb_knowledge table where role, condition, script, and security_attribute are all empty, granting unrestricted access. ACLs with a populated security_attribute are excluded since the Security Attribute provides its own access evaluation. While KB v3 primarily uses user criteria for access control, empty ACLs on the underlying table create a bypass path that can be exploited via the SimpleListWidget or direct table API access.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: Empty ACLs on kb_knowledge table
+ * Check ID: cstaces-11q
+ *
+ * Type:     Script Only
+ * Category: KB Security — ACLs
+ * Severity: High
+ *
+ * Identifies ACL records for the kb_knowledge table where role, condition,
+ * script, AND security_attribute are all empty — granting unrestricted access.
+ * If security_attribute is populated, the ACL delegates to a Security Attribute
+ * check and is not considered empty. While KB v3 primarily uses user criteria
+ * for access control, truly empty ACLs on the underlying table create a bypass
+ * path (e.g., via SimpleListWidget).
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ * Reference: https://www.obsidiansecurity.com/blog/are-your-servicenow-lists-publicly-exposing-data
+ */
+
+(function(engine) {
+
+    var aclRec = new GlideRecord('sys_security_acl');
+    aclRec.addQuery('name', 'CONTAINS', 'kb_knowledge');
+    aclRec.addQuery('active', true);
+    aclRec.query();
+
+    while (aclRec.next()) {
+        var hasRole = false;
+        var hasCondition = aclRec.getValue('condition') !== '' && aclRec.getValue('condition') !== null;
+        var hasScript = aclRec.getValue('script') !== '' && aclRec.getValue('script') !== null;
+        var hasSecAttr = aclRec.getValue('security_attribute') !== '' && aclRec.getValue('security_attribute') !== null;
+
+        // If security_attribute is populated, the ACL delegates to a
+        // Security Attribute check — not considered empty
+        if (hasSecAttr) continue;
+
+        // Check if ACL has any role requirements
+        var aclRoleRec = new GlideRecord('sys_security_acl_role');
+        aclRoleRec.addQuery('sys_security_acl', aclRec.getUniqueValue());
+        aclRoleRec.query();
+        hasRole = aclRoleRec.hasNext();
+
+        if (!hasRole && !hasCondition && !hasScript) {
+            engine.finding.setCurrentSource(aclRec);
+            engine.finding.setValue('finding_details',
+                'ACL "' + aclRec.getValue('name') + '" (operation: ' + aclRec.getValue('operation') +
+                ') on the kb_knowledge table has no role, no condition, and no script — ' +
+                'granting unrestricted access. This can be exploited via direct list access ' +
+                'or widgets like SimpleListWidget to bypass user criteria restrictions. ' +
+                'Add appropriate role requirements or conditions to this ACL.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Custom ACLs on the kb_knowledge table may override user criteria restrictions an
+
+**What:** Identifies non-OOB (custom) ACL records on the kb_knowledge table. ACLs with a populated security_attribute are excluded. Custom ACLs can inadvertently grant broader access than user criteria intend. For example, an ACL granting admin or itil read access without checking user criteria bypasses all KB-level and article-level restrictions. This check flags custom ACLs for review rather than as definitively wrong.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: Custom ACLs on kb_knowledge that may override user criteria
+ * Check ID: cstaces-11r
+ *
+ * Type:     Script Only
+ * Category: KB Security — ACLs
+ * Severity: Medium
+ *
+ * Identifies non-OOB (custom) ACL records on the kb_knowledge table.
+ * Custom ACLs can inadvertently grant broader access than user criteria intend.
+ * For example, an ACL granting 'admin' or 'itil' read access without checking
+ * user criteria bypasses all KB-level and article-level restrictions.
+ *
+ * ACLs with a populated security_attribute field are excluded — the Security
+ * Attribute provides its own access control evaluation.
+ *
+ * This check flags custom ACLs for review — not all are problematic, but
+ * each should be validated against the intended KB access model.
+ *
+ * Reference: https://www.servicenow.com/community/developer-forum/acl-overriding-user-criteria-for-knowledge-base/m-p/3110308
+ */
+
+(function(engine) {
+
+    var aclRec = new GlideRecord('sys_security_acl');
+    aclRec.addQuery('name', 'CONTAINS', 'kb_knowledge');
+    aclRec.addQuery('active', true);
+    aclRec.addQuery('sys_policy', ''); // Empty sys_policy typically means custom/non-protected
+    aclRec.query();
+
+    while (aclRec.next()) {
+        // If security_attribute is populated, the ACL delegates to a
+        // Security Attribute check — skip it
+        var secAttr = aclRec.getValue('security_attribute') || '';
+        if (secAttr) continue;
+
+        // Check if this is likely a custom ACL (not part of a plugin/app)
+        var scope = aclRec.getValue('sys_scope') || '';
+        var updateName = aclRec.getValue('sys_update_name') || '';
+
+        // Flag ACLs not in the 'sn_km' or 'global' scope with known patterns
+        // This is a heuristic — we flag for review, not as definitively wrong
+        var isLikelyCustom = updateName.indexOf('sys_security_acl_') === 0 &&
+            scope !== '' &&
+            scope.indexOf('sn_km') < 0;
+
+        // Also flag if the ACL was created after the instance was set up (custom addition)
+        var created = aclRec.getValue('sys_created_on') || '';
+
+        if (isLikelyCustom) {
+            engine.finding.setCurrentSource(aclRec);
+            engine.finding.setValue('finding_details',
+                'Custom ACL "' + aclRec.getValue('name') + '" (operation: ' + aclRec.getValue('operation') +
+                ', scope: ' + scope + ') exists on the kb_knowledge table. ' +
+                'Custom ACLs can override user criteria restrictions — a user blocked by user criteria ' +
+                'may still access articles if an ACL grants them access. Review this ACL to ensure it ' +
+                'does not bypass intended KB access controls.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Published articles in knowledge bases with no Can Read user criteria are at high
+
+**What:** Identifies published articles where BOTH the parent knowledge base and the article itself have no Can Read user criteria. These articles are the most likely to be exposed to unauthenticated users if glide.knowman.block_access_with_no_user_criteria is false. Reports at the KB level with a count of unprotected articles rather than per-article findings.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: Published articles with no user criteria in open KBs
+ * Check ID: cstaces-11s
+ *
+ * Type:     Script Only
+ * Category: KB Security — Articles
+ * Severity: High
+ *
+ * Identifies published articles where BOTH the parent KB and the article
+ * itself have no "Can Read" user criteria. These articles are the most
+ * likely to be exposed to unauthenticated users.
+ *
+ * Note: This check uses GlideAggregate to report at the KB level (count
+ * of unprotected articles per KB) rather than creating a finding per article,
+ * which would be overwhelming on large instances.
+ *
+ * Reference: https://appomni.com/ao-labs/servicenow-knowledge-bases-data-exposures-uncovered/
+ */
+
+(function(engine) {
+
+    // First, find KBs with no Can Read criteria (reuse logic from kb-no-can-read)
+    var M2M_CANDIDATES = [
+        'kb_uc_can_read_mtom',
+        'm2m_kb_uc_can_read',
+        'kb_uc_can_read_m2m'
+    ];
+    var m2mTable = '';
+    for (var c = 0; c < M2M_CANDIDATES.length; c++) {
+        var test = new GlideRecord(M2M_CANDIDATES[c]);
+        if (test.isValid()) {
+            m2mTable = M2M_CANDIDATES[c];
+            break;
+        }
+    }
+
+    var kbsWithCriteria = {};
+    if (m2mTable) {
+        var m2mRec = new GlideRecord(m2mTable);
+        m2mRec.query();
+        while (m2mRec.next()) {
+            var kbRef = m2mRec.getValue('kb_knowledge_base') || m2mRec.getValue('kb_knowledge_base_id') || '';
+            if (kbRef) kbsWithCriteria[kbRef] = true;
+        }
+    }
+
+    // Find open KBs (no Can Read criteria)
+    var openKBs = [];
+    var kbListRec = new GlideRecord('kb_knowledge_base');
+    kbListRec.addActiveQuery();
+    kbListRec.query();
+    while (kbListRec.next()) {
+        if (!kbsWithCriteria[kbListRec.getUniqueValue()]) {
+            openKBs.push(kbListRec.getUniqueValue());
+        }
+    }
+
+    if (openKBs.length === 0) return;
+
+    // Count published articles per open KB
+    var articleAgg = new GlideAggregate('kb_knowledge');
+    articleAgg.addQuery('kb_knowledge_base', 'IN', openKBs.join(','));
+    articleAgg.addQuery('workflow_state', 'published');
+    articleAgg.addAggregate('COUNT');
+    articleAgg.groupBy('kb_knowledge_base');
+    articleAgg.query();
+
+    while (articleAgg.next()) {
+        var count = parseInt(articleAgg.getAggregate('COUNT'), 10);
+        if (count > 0) {
+            var kbId = articleAgg.getValue('kb_knowledge_base');
+            var kbRec = new GlideRecord('kb_knowledge_base');
+            if (kbRec.get(kbId)) {
+                engine.finding.setCurrentSource(kbRec);
+                engine.finding.setValue('finding_details',
+                    'Knowledge Base "' + kbRec.getValue('title') + '" has no "Can Read" user criteria ' +
+                    'and contains ' + count + ' published article(s) that also lack article-level ' +
+                    'user criteria. These articles are the highest risk for unintended exposure. ' +
+                    'Add "Can Read" user criteria to the KB or to individual sensitive articles.');
+                engine.finding.increment();
+            }
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Articles with the public role in the roles field should be reviewed to confirm i
+
+**What:** Identifies published articles on the kb_knowledge table where the roles field contains the public role. While the Mark Public action adds the public role, this does little to make the article actually accessible without authentication. However, it creates confusion about intended access levels and may interact unexpectedly with glide.knowman.search.apply_role_based_security. The presence of the public role should be audited to confirm it was intentional.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: Articles with the 'public' role set
+ * Check ID: cstaces-11t
+ *
+ * Type:     Script Only
+ * Category: KB Security — Articles
+ * Severity: Medium
+ *
+ * Identifies published KB articles where the 'roles' field contains 'public'.
+ * While this doesn't directly enable unauthenticated access (users still need
+ * to authenticate), it signals intent for broad access and may interact
+ * unexpectedly with glide.knowman.search.apply_role_based_security.
+ *
+ * Each article found should be reviewed to confirm the public role is intentional.
+ *
+ * Reference: https://servicenowguru.com/system-definition/controlling-public-availability-knowledge-base-content/
+ */
+
+(function(engine) {
+
+    var articleRec = new GlideRecord('kb_knowledge');
+    articleRec.addQuery('workflow_state', 'published');
+    articleRec.addQuery('roles', 'CONTAINS', 'public');
+    articleRec.addActiveQuery();
+    articleRec.query();
+
+    while (articleRec.next()) {
+        engine.finding.setCurrentSource(articleRec);
+        engine.finding.setValue('finding_details',
+            'Article "' + articleRec.getValue('short_description') + '" (number: ' +
+            articleRec.getValue('number') + ') in KB "' + articleRec.getDisplayValue('kb_knowledge_base') +
+            '" has the "public" role set. Review whether broad public access is intentional ' +
+            'for this article. The public role may interact with ' +
+            'glide.knowman.search.apply_role_based_security to affect search visibility.');
+        engine.finding.increment();
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Knowledge bases using scripted (advanced) user criteria should be reviewed for p
+
+**What:** Identifies user criteria records with Advanced (scripted) evaluation that are applied to knowledge bases via Can Read, Cannot Read, Can Contribute, or Cannot Contribute. Scripted criteria are cached at session level only (not application level), causing performance degradation. They are harder to audit since an administrator cannot easily determine who matches a scripted condition without running it. Scripts may also contain logic bugs that inadvertently grant or deny access.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: Scripted (advanced) user criteria applied to KBs
+ * Check ID: cstaces-11u
+ *
+ * Type:     Script Only
+ * Category: KB Security — User Criteria
+ * Severity: Medium
+ *
+ * Identifies user criteria records with "Advanced" (scripted) evaluation
+ * that are applied to knowledge bases. Scripted criteria are:
+ *   - Cached at session level only (not application level) — performance hit
+ *   - Harder to audit — cannot determine who matches without running the script
+ *   - May contain logic bugs that inadvertently grant or deny access
+ *
+ * Best practice: extend the user_criteria table with additional fields instead.
+ *
+ * Reference: https://www.servicenow.com/community/itsm-blog/scripts-in-user-criteria/ba-p/2294597
+ */
+
+(function(engine) {
+
+    // Find all scripted user criteria
+    var scriptedUC = {};
+    var ucRec = new GlideRecord('user_criteria');
+    ucRec.addQuery('advanced', true);
+    ucRec.addActiveQuery();
+    ucRec.query();
+    while (ucRec.next()) {
+        scriptedUC[ucRec.getUniqueValue()] = ucRec.getValue('name');
+    }
+
+    if (Object.keys(scriptedUC).length === 0) return;
+
+    // Check all M2M tables for these criteria being used on KBs
+    var M2M_TABLES = [
+        'kb_uc_can_read_mtom', 'm2m_kb_uc_can_read', 'kb_uc_can_read_m2m',
+        'kb_uc_cannot_read_mtom', 'm2m_kb_uc_cannot_read', 'kb_uc_cannot_read_m2m',
+        'kb_uc_can_contribute_mtom', 'm2m_kb_uc_can_contribute', 'kb_uc_can_contribute_m2m',
+        'kb_uc_cannot_contribute_mtom', 'm2m_kb_uc_cannot_contribute', 'kb_uc_cannot_contribute_m2m'
+    ];
+
+    var findings = {}; // kbId -> [criteriaNames]
+
+    for (var t = 0; t < M2M_TABLES.length; t++) {
+        var m2mRec = new GlideRecord(M2M_TABLES[t]);
+        if (!m2mRec.isValid()) continue;
+        m2mRec.query();
+        while (m2mRec.next()) {
+            var ucRef = m2mRec.getValue('user_criteria') || m2mRec.getValue('user_criteria_id') || '';
+            var kbRef = m2mRec.getValue('kb_knowledge_base') || m2mRec.getValue('kb_knowledge_base_id') || '';
+            if (ucRef && kbRef && scriptedUC[ucRef]) {
+                if (!findings[kbRef]) findings[kbRef] = [];
+                if (findings[kbRef].indexOf(scriptedUC[ucRef]) < 0) {
+                    findings[kbRef].push(scriptedUC[ucRef]);
+                }
+            }
+        }
+    }
+
+    // Report findings per KB
+    for (var kbId in findings) {
+        var kbRec = new GlideRecord('kb_knowledge_base');
+        if (kbRec.get(kbId) && kbRec.getValue('active') === 'true') {
+            engine.finding.setCurrentSource(kbRec);
+            engine.finding.setValue('finding_details',
+                'Knowledge Base "' + kbRec.getValue('title') + '" uses ' +
+                findings[kbId].length + ' scripted (advanced) user criteria: ' +
+                findings[kbId].join(', ') + '. Scripted criteria are cached at session level ' +
+                'only (degraded performance), are difficult to audit, and may contain logic bugs. ' +
+                'Consider replacing with field-based criteria by extending the user_criteria table.');
+            engine.finding.increment();
+        }
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Knowledge bases with commenting enabled should be reviewed, as comments can be u
+
+**What:** Identifies active knowledge bases where the disable_commenting field is false (commenting is enabled). Comments on KB articles can be used to post sensitive information, phishing links, or social engineering content. For knowledge bases containing sensitive content or those accessible to external users, commenting should generally be disabled as a governance measure.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+/**
+ * Instance Scan Check: KBs with commenting enabled
+ * Check ID: cstaces-11v
+ *
+ * Type:     Script Only
+ * Category: KB Security — Governance
+ * Severity: Low
+ *
+ * Identifies active knowledge bases where commenting is enabled
+ * (disable_commenting = false). Comments on KB articles can be used to
+ * post sensitive information, phishing links, or social engineering content.
+ *
+ * This is an informational check — commenting may be appropriate for
+ * internal KBs but should be reviewed for externally-facing or
+ * sensitive content KBs.
+ */
+
+(function(engine) {
+
+    var kbRec = new GlideRecord('kb_knowledge_base');
+    kbRec.addActiveQuery();
+    kbRec.addQuery('disable_commenting', false);
+    kbRec.query();
+
+    while (kbRec.next()) {
+        engine.finding.setCurrentSource(kbRec);
+        engine.finding.setValue('finding_details',
+            'Knowledge Base "' + kbRec.getValue('title') + '" has commenting enabled. ' +
+            'Comments can be used to post sensitive data, phishing links, or misleading content. ' +
+            'Review whether commenting is appropriate for this KB, especially if it is ' +
+            'externally-facing or contains sensitive content. Set "Disable Commenting" to true ' +
+            'if comments are not needed.');
+        engine.finding.increment();
+    }
+
 })(engine);
 ```
 
@@ -1662,14 +3511,17 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     // Find scheduled jobs configured to run as admin users
     var scheduledJob = new GlideRecord('sysauto_script');
     scheduledJob.addQuery('active', 'true');
     scheduledJob.query();
+
     var adminJobs = [];
     while (scheduledJob.next()) {
         var runAs = scheduledJob.run_as.toString();
         var runAsUser = new GlideRecord('sys_user');
+
         if (runAs && runAsUser.get(runAs)) {
             var adminRoleCheck = new GlideRecord('sys_user_has_role');
             adminRoleCheck.addQuery('user', runAs);
@@ -1677,8 +3529,11 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             adminRoleCheck.addQuery('state', 'active');
             adminRoleCheck.query();
             if (adminRoleCheck.hasNext()) {
+
                 engine.finding.setCurrentSource(scheduledJob);
+				engine.finding.setValue('finding_details', scheduledJob.sys_name.getDisplayValue() + ' running as user:'+runAsUser.getDisplayValue());
                 engine.finding.increment();
+
                 adminJobs.push({
                     name: scheduledJob.name.toString(),
                     run_as: runAsUser.name.toString(),
@@ -1688,7 +3543,9 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             }
         }
     }
+
     //gs.info('Scheduled jobs running as admin: ' + JSON.stringify(adminJobs, null, 2));
+
 })(engine);
 ```
 
@@ -1707,23 +3564,47 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function(engine) {
+
     // Audit active OAuth applications and their token lifespans
     var oauthEntity = new GlideRecord('oauth_entity');
     oauthEntity.addQuery('active', 'true');
     oauthEntity.query();
+
     var oauthApps = [];
     while (oauthEntity.next()) {
+
+
+		//Get extended record
+		var oauthRec = new GlideRecord(oauthEntity.sys_class_name);
+		oauthRec.get(oauthEntity.getUniqueValue());
+
+		var oauthName = oauthRec.name.getDisplayValue();
+
+		var oauthTypeDisp = oauthRec.type.getDisplayValue();
+		var oauthTypeStr = oauthRec.type.getValue();
+
+		var oauthGrantDisp = oauthRec.default_grant_type.getDisplayValue();
+		var oauthGrantStr = oauthRec.default_grant_type.getValue();
+
+
+		var findingStr = oauthName + ' ('+ oauthGrantDisp + ') - Review and disable record or mute finding.';
+
 		engine.finding.setCurrentSource(oauthEntity);
+		engine.finding.setValue('finding_details',findingStr);
 		engine.finding.increment();
-        oauthApps.push({
-            name: oauthEntity.name.toString(),
-            client_id: oauthEntity.client_id.toString(),
-            redirect_url: oauthEntity.redirect_url.toString(),
-            access_token_lifespan: oauthEntity.access_token_lifespan.toString(),
-            refresh_token_lifespan: oauthEntity.refresh_token_lifespan.toString()
-        });
+
+
+        // oauthApps.push({
+        //     name: oauthEntity.name.toString(),
+        //     client_id: oauthEntity.client_id.toString(),
+        //     redirect_url: oauthEntity.redirect_url.toString(),
+        //     access_token_lifespan: oauthEntity.access_token_lifespan.toString(),
+        //     refresh_token_lifespan: oauthEntity.refresh_token_lifespan.toString()
+        // });
     }
+
     //gs.info('Active OAuth applications: ' + JSON.stringify(oauthApps, null, 2));
+
 })(engine);
 ```
 
@@ -1743,12 +3624,16 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 ```javascript
 (function(engine) {
 
+
     //var sw = new GlideStopWatch();
+
     var businessRule = new GlideRecord('sys_script');
     businessRule.addQuery('active', 'true');
     businessRule.addQuery('when', 'IN', 'before,after,async,display');
     businessRule.query();
+
     //gs.info('Scanning ' + businessRule.getRowCount() + ' active business rules...\n');
+
     var systemRules = [];
     var dangerousPatterns = [
         'gs.setProperty',
@@ -1763,15 +3648,19 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         'gs.getSession().putClientData',
         'answer = true;'
     ];
+
     while (businessRule.next()) {
         var script = businessRule.script.toString();
         var matchedPatterns = [];
+
         for (var i = 0; i < dangerousPatterns.length; i++) {
             if (script.indexOf(dangerousPatterns[i]) > -1) {
                 matchedPatterns.push(dangerousPatterns[i]);
             }
         }
+
         if (matchedPatterns.length > 0) {
+
 			
 			var brMatchedPatternObj = {
                 name: businessRule.name.toString(),
@@ -1782,14 +3671,19 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
                 matched_patterns: matchedPatterns,
                 pattern_count: matchedPatterns.length
             };
+
             systemRules.push(brMatchedPatternObj);
+
 			engine.finding.setCurrentSource(businessRule);
-			engine.finding.setValue('finding_details',JSON.stringify(brMatchedPatternObj));
+			engine.finding.setValue('finding_details','Patterns found:'+JSON.stringify(matchedPatterns));
 			engine.finding.increment();
+
         }
     }
+
     //gs.info('Scan completed in: ' + sw.elapsed() + 'ms');
     //gs.warn('\nFound ' + systemRules.length + ' business rules with potential privilege escalation patterns\n');
+
     // for (var j = 0; j < systemRules.length; j++) {
     //     var rule = systemRules[j];
     //     gs.warn('---');
@@ -1799,9 +3693,13 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     //     gs.warn('Patterns found: ' + rule.matched_patterns.join(', '));
     //     gs.warn('Sys ID: ' + rule.sys_id);
     // }
+
     //gs.info('\n=== JSON Export ===');
     //gs.info(JSON.stringify(systemRules, null, 2));
+
     return systemRules;
+
+
 
 
 })(engine);
@@ -1822,21 +3720,26 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function (engine) {
+
 	var uiPolicy = new GlideRecord('sys_ui_policy');
 	uiPolicy.addQuery('active', 'true');
 	uiPolicy.query();
+
 	while (uiPolicy.next()) {
 		var actions = new GlideRecord('sys_ui_policy_action');
 		actions.addQuery('ui_policy', uiPolicy.getUniqueValue());
 		actions.addQuery('mandatory', 'false');
 		actions.query();
-		if (actions.hasNext()) {
-			gs.info('UI Policy bypassing mandatory fields: ' + uiPolicy.short_description.toString());
+
+		if (actions.next()) {
+			//gs.info('UI Policy bypassing mandatory fields: ' + uiPolicy.short_description.toString());
+
 			engine.finding.setCurrentSource(actions);
-			engine.finding.setValue('finding_details','Possible finding. Needs review.');
+			engine.finding.setValue('finding_details','Not mandatory: '+ uiPolicy.short_description.toString());
 			engine.finding.increment();
 		}
 	}
+
 })(engine);
 ```
 
@@ -1855,14 +3758,17 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function (engine) {
+
 	// Check authentication and session security properties
 	var policies = [
-		'glide.ui.security.allow_guest',          // Guest access enabled?
-		'glide.authenticate.multisso.use.idp',    // Multi-provider SSO
+		'glide.authenticate.sso.redirect.idp',
+		'glide.authenticate.multisso.enabled',
 		'glide.authenticate.sso.required',        // SSO enforcement
 		'glide.ui.session_timeout'                // UI session timeout
 	];
 		//'session.timeout',                        // Session timeout
+		//'glide.ui.security.allow_guest',          // Guest access enabled?
+		//'glide.authenticate.multisso.use.idp',    // Multi-provider SSO
 
 	var policySettings = {};
 	for (var i = 0; i < policies.length; i++) {
@@ -1871,20 +3777,35 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 		
 		var policyValue = gs.getProperty(policies[i]);
 		policySettings[policies[i]] = policyValue;
+
+
+		//engine.finding.setCurrentSource(propRec);
+		engine.finding.setValue('finding_details','1Property currently configured as:'+policyValue);
+		engine.finding.increment();
+
 		//Get Record
 		var propRec = new GlideRecord('sys_properties');
 		propRec.addQuery('name',policies[i]);
 		propRec.query();
 		if(propRec.next()){
+
 			engine.finding.setCurrentSource(propRec);
-			engine.finding.setValue('finding_details','Property currently configured as:'+policyValue);
+			engine.finding.setValue('finding_details','2Property currently configured as:'+policyValue);
 			engine.finding.increment();
+
 		}else{
-			gs.warn('Instance Scan Check cant find prop:'+policies[i]);
+
+			engine.finding.setValue('finding_details','Cant find prop:'+policies[i]);
+			engine.finding.increment();
+
 		}
 
+
+
 	}
+
 	//gs.info('Security policy settings: ' + JSON.stringify(policySettings, null, 2));
+
 })(engine);
 ```
 
@@ -1903,6 +3824,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 
 ```javascript
 (function (engine) {
+
 	// Find privileged users without MFA enrolled
 	var privilegedUserIds = {};
 	var adminRoleQuery = new GlideRecord('sys_user_has_role');
@@ -1910,9 +3832,11 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 	adminRoleQuery.addQuery('user.active', 'true');
 	adminRoleQuery.addQuery('state', 'active');
 	adminRoleQuery.query();
+
 	while (adminRoleQuery.next()) {
 		privilegedUserIds[adminRoleQuery.getValue('user')] = true;
 	}
+
 	var noMFAUsers = [];
 	for (var userId in privilegedUserIds) {
 		var userRecord = new GlideRecord('sys_user');
@@ -1921,10 +3845,13 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 			mfaDevice.addQuery('user', userId);
 			mfaDevice.addQuery('active', 'true');
 			mfaDevice.query();
+
 			if (!mfaDevice.hasNext()) {
+
 				engine.finding.setCurrentSource(userRecord);
 				//engine.finding.setValue('finding_details','Found with DIRECT role assignment');
 				engine.finding.increment();
+
 
 				noMFAUsers.push({
 					user: userRecord.user_name.toString(),
@@ -1934,12 +3861,13 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 			}
 		}
 	}
+
 	//gs.warn('Admin users without MFA: ' + JSON.stringify(noMFAUsers, null, 2));
+
 })(engine);
 ```
 
 </details>
-
 
 ---
 

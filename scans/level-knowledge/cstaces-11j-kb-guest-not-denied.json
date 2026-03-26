@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies active knowledge bases where the Guest user is not included in any Cannot Read user criteria. If Guest is not explicitly denied and other conditions permit access (such as Any User in Can Read or no user criteria at all), unauthenticated users can view KB content. User criteria prioritizes Deny over Allow, so having Guest in Cannot Read is a critical safety net even if Can Read accidentally includes broad criteria.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0550924",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11j kb-guest-not-denied",
+  "priority": 4,
+  "resolution_details": "Add the Guest user to a Cannot Read user criteria on the flagged knowledge base. If a Cannot Read criteria does not exist, create one that includes the Guest user record (user_name=guest). The OOB Business Rule does this automatically for new KBs, but existing KBs must be updated manually.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "The Guest user must be included in a Cannot Read user criteria on every active k",
+  "sys_id": "ddae8c922fa7fa100fe9f74fafa4e3b1",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Checks the sys_public table for active records with KB-related page values: kb_comments, kb_find, kb_home, kb_list, and kb_view. Any active record means unauthenticated users can reach that Knowledge portal page without logging in. Even if user criteria restrict article content, public portal pages increase the attack surface and enable reconnaissance such as enumerating KB names and categories.",
+  "documentation_url": "https://docs.servicenow.com/bundle/latest/page/product/knowledge-management/reference/r_KnowledgeProperties.html",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11n public-kb-pages",
+  "priority": 4,
+  "resolution_details": "Navigate to System Definition > Public Pages (sys_public.list) and deactivate or delete any records for KB pages (kb_view, kb_find, kb_home, kb_list, kb_comments). If public KB access is intentionally required, ensure all knowledge bases have proper user criteria configured.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "KB endpoint pages (kb_view, kb_find, kb_home, kb_list) must not be listed in sys",
+  "sys_id": "1acf4cda2fa7fa100fe9f74fafa4e3b0",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

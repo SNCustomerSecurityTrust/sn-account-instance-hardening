@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Checks that the Business Rule (sys_id 6c8ec5147711111016f35c207b5a9969) which adds the Guest User to Cannot Read and Cannot Contribute user criteria when a new KB is created is active. If deactivated (e.g., during troubleshooting and never re-enabled), newly created knowledge bases will not automatically have Guest denied access, leaving them vulnerable to unauthenticated exposure.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0550924",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11m br-guest-user-inactive",
+  "priority": 4,
+  "resolution_details": "Navigate to sys_script.do?sys_id=6c8ec5147711111016f35c207b5a9969 and verify the Business Rule is active. If it was deactivated, re-enable it immediately. Also audit any KBs created while the rule was inactive and manually add Guest to their Cannot Read criteria.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "The Guest User Business Rule that auto-denies Guest access on new KBs must remai",
+  "sys_id": "416ec4522fa7fa100fe9f74fafa4e356",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

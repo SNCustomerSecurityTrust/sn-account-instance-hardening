@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies published articles where BOTH the parent knowledge base and the article itself have no Can Read user criteria. These articles are the most likely to be exposed to unauthenticated users if glide.knowman.block_access_with_no_user_criteria is false. Reports at the KB level with a count of unprotected articles rather than per-article findings.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0689656",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11s kba-no-criteria-open-kb-OOB-IS",
+  "priority": 4,
+  "resolution_details": "Add Can Read user criteria to the parent knowledge base to protect all articles within it. For KBs with mixed-sensitivity content, also add article-level Can Read criteria to sensitive articles. Prioritize KBs with the highest count of unprotected published articles.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Published articles in knowledge bases with no Can Read user criteria are at high",
+  "sys_id": "560f04562fa7fa100fe9f74fafa4e3a9",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

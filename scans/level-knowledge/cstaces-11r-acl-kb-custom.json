@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies non-OOB (custom) ACL records on the kb_knowledge table. ACLs with a populated security_attribute are excluded. Custom ACLs can inadvertently grant broader access than user criteria intend. For example, an ACL granting admin or itil read access without checking user criteria bypasses all KB-level and article-level restrictions. This check flags custom ACLs for review rather than as definitively wrong.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0550924",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11r acl-kb-custom",
+  "priority": 4,
+  "resolution_details": "Review each flagged custom ACL to determine if it bypasses intended user criteria restrictions. Verify the ACL was created intentionally and that its role, condition, and script are appropriate. Consider removing custom ACLs that duplicate or conflict with KB user criteria.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Custom ACLs on the kb_knowledge table may override user criteria restrictions an",
+  "sys_id": "a8fd889e2f67fa100fe9f74fafa4e30c",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

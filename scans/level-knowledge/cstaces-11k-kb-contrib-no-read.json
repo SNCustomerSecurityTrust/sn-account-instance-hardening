@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies KBs where Can Contribute is configured but Can Read is empty. This is a dangerous misconfiguration: when glide.knowman.block_access_with_no_user_criteria is true, it only blocks access when NEITHER Can Read NOR Can Contribute is set. If Can Contribute exists (even narrowly), the system considers the KB to have criteria and will NOT block access. Since no Can Read restriction exists, unauthenticated users may still read all articles.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0623654",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11k kb-contrib-no-read",
+  "priority": 4,
+  "resolution_details": "Add explicit Can Read user criteria to the flagged knowledge base immediately. This KB has a false sense of security because Can Contribute is configured but does not protect read access. Ensure Can Read criteria match the intended audience for reading articles.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Knowledge bases with Can Contribute set but no Can Read criteria create a danger",
+  "sys_id": "1c9e04922fa7fa100fe9f74fafa4e303",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

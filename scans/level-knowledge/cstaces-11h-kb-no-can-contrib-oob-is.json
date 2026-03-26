@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies active knowledge bases where the Can Contribute user criteria is empty. When Can Contribute is empty, ALL authenticated users implicitly gain contribute access, meaning any user can create, modify, or retire articles. Since contribute access implies read access by default (unless glide.knowman.apply_article_read_criteria is true), this also bypasses article-level Can Read and Cannot Read restrictions.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0623654",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11h kb-no-can-contrib-OOB-IS",
+  "priority": 4,
+  "resolution_details": "Add appropriate Can Contribute user criteria to restrict who can author and edit articles. Typically this should be limited to knowledge managers, knowledge authors, or specific department groups. Navigate to the KB record, User Criteria tab, and configure Can Contribute.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Active knowledge bases with empty Can Contribute criteria implicitly allow all a",
+  "sys_id": "c9be8c922fa7fa100fe9f74fafa4e3ab",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

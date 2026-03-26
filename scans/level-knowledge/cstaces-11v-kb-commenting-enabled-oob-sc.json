@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies active knowledge bases where the disable_commenting field is false (commenting is enabled). Comments on KB articles can be used to post sensitive information, phishing links, or social engineering content. For knowledge bases containing sensitive content or those accessible to external users, commenting should generally be disabled as a governance measure.",
+  "documentation_url": "https://docs.servicenow.com/bundle/latest/page/product/knowledge-management/reference/r_KnowledgeProperties.html",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11v kb-commenting-enabled-OOB-SC",
+  "priority": 4,
+  "resolution_details": "Review each flagged KB and determine if commenting is necessary for the knowledge management workflow. For sensitive or externally-facing KBs, set disable_commenting to true on the kb_knowledge_base record. If commenting is needed, ensure that comment moderation processes are in place.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Knowledge bases with commenting enabled should be reviewed, as comments can be u",
+  "sys_id": "0b7ec4522fa7fa100fe9f74fafa4e311",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

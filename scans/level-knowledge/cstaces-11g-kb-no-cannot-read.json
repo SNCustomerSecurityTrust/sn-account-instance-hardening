@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies active knowledge bases with no Cannot Read user criteria (deny list). Without a Cannot Read denylist, there is no explicit block for unauthenticated or guest users. The Guest User Business Rule should automatically add Guest to Cannot Read on new KBs, but older KBs or KBs created when the Business Rule was inactive will lack this protection. Cannot always overrides Can in user criteria evaluation, making denylists a critical defense-in-depth layer.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0689656",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11g kb-no-cannot-read",
+  "priority": 4,
+  "resolution_details": "Add a Cannot Read user criteria that includes the Guest user to the flagged knowledge base. Navigate to the KB record, then the User Criteria tab, and add Guest to the Cannot Read criteria. Consider also adding any service accounts or external users that should be blocked.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Active knowledge bases should have Cannot Read user criteria to explicitly deny ",
+  "sys_id": "43ce44162fa7fa100fe9f74fafa4e36e",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

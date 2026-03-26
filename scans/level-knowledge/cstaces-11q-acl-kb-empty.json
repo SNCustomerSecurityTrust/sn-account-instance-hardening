@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Identifies ACL records for the kb_knowledge table where role, condition, script, and security_attribute are all empty, granting unrestricted access. ACLs with a populated security_attribute are excluded since the Security Attribute provides its own access evaluation. While KB v3 primarily uses user criteria for access control, empty ACLs on the underlying table create a bypass path that can be exploited via the SimpleListWidget or direct table API access.",
+  "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0550924",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11q acl-kb-empty",
+  "priority": 3,
+  "resolution_details": "Review and correct any empty ACLs on the kb_knowledge table. Add appropriate role requirements, conditions, or scripts to restrict access. If the ACL is not needed, deactivate it. Ensure that remaining ACLs do not conflict with user criteria restrictions.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "ACLs on the kb_knowledge table must not be empty (no role, condition, script, or",
+  "sys_id": "502ec8de2f67fa100fe9f74fafa4e37b",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}

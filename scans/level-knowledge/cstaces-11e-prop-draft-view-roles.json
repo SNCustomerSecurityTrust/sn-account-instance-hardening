@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "Checks that glide.knowman.section.view_roles.draft is not set to overly permissive roles such as itil, snc_internal, employee, or left empty. This property controls which roles can see articles in Draft state. If set to a common role, draft articles containing incomplete or sensitive information become visible to a broad audience before editorial review and approval.",
+  "documentation_url": "https://docs.servicenow.com/bundle/latest/page/product/knowledge-management/reference/r_KnowledgeProperties.html",
+  "finding_type": "scan_finding",
+  "name": "cstaces-11e prop-draft-view-roles",
+  "priority": 4,
+  "resolution_details": "Set glide.knowman.section.view_roles.draft to restrictive roles such as knowledge or knowledge_admin. Review any custom workflow states and ensure their corresponding view_roles properties are also restricted.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "glide.knowman.section.view_roles.draft should be restricted to knowledge managem",
+  "sys_id": "338f849a2fa7fa100fe9f74fafa4e34e",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level Knowledge"
+}
