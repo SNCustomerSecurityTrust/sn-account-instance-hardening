@@ -27,3 +27,6 @@ __pycache__/
 build/
 .venv/
 venv/
+
+# Build/management scripts (kept locally, not in repo)
+*.py
