@@ -4,6 +4,31 @@ All notable changes to the CS&T Instance Hardening Checks project are documented
 
 ---
 
+## v1.6a - 2026-04-14
+
+### Added
+- **cstaces-12** (local-account-login) — Detects active users logging in via local DB authentication instead of SSO; queries `sys_user_login_history` for DB auth events in the last 30 days (Level 2)
+- **cstaces-13** (role-mgt-v2) — Checks whether the Role Management v2 plugin (`com.glide.role_management.inh_count`) is installed (Level 2)
+- Added `short_description`, `description`, `resolution_details`, and `documentation_url` for both new checks
+
+### Changed
+- Updated scripts for cstaces-4a (secadmin) and cstaces-5b (active OAuth) with latest instance versions
+- Updated scripts for cstaces-1a (admin users) with last-login-days-ago in finding details
+- Total checks: 44 (up from 42), total m2m records: 44
+- Regenerated README with all 47 check entries across 5 suites (including multi-suite mappings)
+
+### Removed
+- Orphaned `cstaces-12-local-db-logins` source files (superseded by `cstaces-12-local-account-login` after instance import)
+
+## v1.6 - 2026-04-14
+
+### Added
+- cstaces-12 and cstaces-13 check records imported to instance and added to update set
+- Updated check scripts from instance development
+
+### Changed
+- Total records: 94 (6 suites, 44 m2m, 44 checks)
+
 ## v1.5a - 2026-03-26
 
 ### Changed

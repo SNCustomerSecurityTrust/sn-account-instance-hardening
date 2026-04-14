@@ -15,7 +15,8 @@
     // Query active ACLs with no condition and no script
     var aclRecord = new GlideRecord('sys_security_acl');
     aclRecord.addQuery('active', 'true');
-    aclRecord.addNullQuery('condition');
+	aclRecord.addNullQuery('condition');
+    aclRecord.addNullQuery('security_attribute');
     aclRecord.addNullQuery('script');
     aclRecord.addQuery('sys_policy', '!=', 'read'); // Exclude read-only locked OOB records
     aclRecord.query();

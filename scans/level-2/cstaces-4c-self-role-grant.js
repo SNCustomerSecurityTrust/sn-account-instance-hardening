@@ -1,3 +1,5 @@
+// Additional finding details added, needs further debugging (known issue: 0 items found every time) Apr 2026
+
 (function(engine) {
 
     var secAdminUsers = {};
@@ -37,7 +39,7 @@
         secAdminUsernames.push(u);
     }
 
-    gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+    // gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
 
     var highRiskRoles = ['admin', 'security_admin', 'impersonator'];
     var roleGrantTables = ['sys_user_has_role', 'sys_group_has_role'];
@@ -94,13 +96,24 @@
     var highRiskGrants = [];
     var selfGrants = [];
     for (var k = 0; k < roleGrants.length; k++) {
-        if (roleGrants[k].is_self_grant) selfGrants.push(roleGrants[k]);
+        if (roleGrants[k].is_self_grant){
+			selfGrants.push(roleGrants[k]);
+
+			var grantedByUser = roleGrants[k].granted_by_display;
+			var roleRec = new GlideRecord('sys_user_role');
+			roleRec.get('name',roleGrants[k].role_granted);
+
+			engine.finding.setCurrentSource(roleRec);
+            engine.finding.setValue('finding_details', 'Role self-granted by user: '+grantedByUser);
+            engine.finding.increment();
+
+		} 
         if (roleGrants[k].is_high_risk_role) highRiskGrants.push(roleGrants[k]);
     }
 
-    gs.info('Total role grants by security_admin users (last 30 days): ' + roleGrants.length);
-    gs.info('High risk role grants (admin/security_admin/impersonator): ' + highRiskGrants.length);
-    gs.info('Self grants: ' + selfGrants.length);
-    gs.info(JSON.stringify(roleGrants, null, 2));
+    // gs.info('Total role grants by security_admin users (last 30 days): ' + roleGrants.length);
+    // gs.info('High risk role grants (admin/security_admin/impersonator): ' + highRiskGrants.length);
+    // gs.info('Self grants: ' + selfGrants.length);
+    // gs.info(JSON.stringify(roleGrants, null, 2));
 
 })(engine);

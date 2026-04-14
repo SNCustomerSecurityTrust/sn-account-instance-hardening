@@ -44,8 +44,16 @@
         while (direct.next()) {
             addUser(direct.getValue('user'), roleName, 'direct:' + roleName);
 			var userRec = direct.user.getRefRecord();
+
+			var userLastLogin = userRec.getValue('last_login');
+			var timeStart = new GlideDateTime(userLastLogin);
+			var timeNow = new GlideDateTime();
+			var durRaw = GlideDateTime.subtract(timeStart,timeNow); 
+			var daysRaw = durRaw.numericValue / 1000 / 60 / 60 / 24;
+			var days = Math.floor(daysRaw);
+
 			engine.finding.setCurrentSource(userRec);
-			engine.finding.setValue('finding_details','Found with DIRECT role:'+roleName);
+			engine.finding.setValue('finding_details','Found with DIRECT role:'+roleName+ 'Last login days ago:'+days);
 			engine.finding.increment();
         }
     }
@@ -65,8 +73,17 @@
             while (member.next()) {
                 addUser(member.getValue('user'), groupRoleName, 'group:' + groupName + ':' + groupRoleName);
 				var userRec2 = member.user.getRefRecord();
+
+				var userLastLogin2 = userRec2.getValue('last_login');
+				var timeStart2 = new GlideDateTime(userLastLogin2);
+				var timeNow2 = new GlideDateTime();
+				var durRaw2 = GlideDateTime.subtract(timeStart2,timeNow2); 
+				var daysRaw2 = durRaw.numericValue / 1000 / 60 / 60 / 24;
+				var days2 = Math.floor(daysRaw2);
+
+
 				engine.finding.setCurrentSource(userRec2);
-				engine.finding.setValue('finding_details','Found with role:'+groupRoleName+' INHEIRITED via group:'+groupName);
+				engine.finding.setValue('finding_details','Found with role:'+groupRoleName+' INHEIRITED via group:'+groupName + 'Last login days ago:'+days2);
 				engine.finding.increment();
             }
         }

@@ -190,8 +190,16 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         while (direct.next()) {
             addUser(direct.getValue('user'), roleName, 'direct:' + roleName);
 			var userRec = direct.user.getRefRecord();
+
+			var userLastLogin = userRec.getValue('last_login');
+			var timeStart = new GlideDateTime(userLastLogin);
+			var timeNow = new GlideDateTime();
+			var durRaw = GlideDateTime.subtract(timeStart,timeNow); 
+			var daysRaw = durRaw.numericValue / 1000 / 60 / 60 / 24;
+			var days = Math.floor(daysRaw);
+
 			engine.finding.setCurrentSource(userRec);
-			engine.finding.setValue('finding_details','Found with DIRECT role:'+roleName);
+			engine.finding.setValue('finding_details','Found with DIRECT role:'+roleName+ 'Last login days ago:'+days);
 			engine.finding.increment();
         }
     }
@@ -211,8 +219,17 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
             while (member.next()) {
                 addUser(member.getValue('user'), groupRoleName, 'group:' + groupName + ':' + groupRoleName);
 				var userRec2 = member.user.getRefRecord();
+
+				var userLastLogin2 = userRec2.getValue('last_login');
+				var timeStart2 = new GlideDateTime(userLastLogin2);
+				var timeNow2 = new GlideDateTime();
+				var durRaw2 = GlideDateTime.subtract(timeStart2,timeNow2); 
+				var daysRaw2 = durRaw.numericValue / 1000 / 60 / 60 / 24;
+				var days2 = Math.floor(daysRaw2);
+
+
 				engine.finding.setCurrentSource(userRec2);
-				engine.finding.setValue('finding_details','Found with role:'+groupRoleName+' INHEIRITED via group:'+groupName);
+				engine.finding.setValue('finding_details','Found with role:'+groupRoleName+' INHEIRITED via group:'+groupName + 'Last login days ago:'+days2);
 				engine.finding.increment();
             }
         }
@@ -959,8 +976,17 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     while (direct.next()) {
 
 		var userRec = direct.user.getRefRecord();
+
+		var userLastLogin = userRec.getValue('last_login');
+		var timeStart = new GlideDateTime(userLastLogin);
+		var timeNow = new GlideDateTime();
+		var durRaw = GlideDateTime.subtract(timeStart,timeNow); 
+		var daysRaw = durRaw.numericValue / 1000 / 60 / 60 / 24;
+		var days = Math.floor(daysRaw);
+
+
 		engine.finding.setCurrentSource(userRec);
-		engine.finding.setValue('finding_details', 'User found with DIRECT security_admin role assignment');
+		engine.finding.setValue('finding_details', 'User found with DIRECT security_admin role assignment. Last login days ago:'+days);
 		engine.finding.increment();
 
         addUser(direct.getValue('user'), 'direct:security_admin');
@@ -978,8 +1004,16 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         while (member.next()) {
 
 			var userRec2 = groupRole.user.getRefRecord();
+
+			var userLastLogin2 = userRec.getValue('last_login');
+			var timeStart2 = new GlideDateTime(userLastLogin2);
+			var timeNow2 = new GlideDateTime();
+			var durRaw2 = GlideDateTime.subtract(timeStart2,timeNow); 
+			var daysRaw2 = durRaw.numericValue / 1000 / 60 / 60 / 24;
+			var days2 = Math.floor(daysRaw2);
+
 			engine.finding.setCurrentSource(userRec2);
-			engine.finding.setValue('finding_details', 'Found with NESTED security_admin role via:'+groupName);
+			engine.finding.setValue('finding_details', 'Found with NESTED security_admin role via:'+groupName + 'Last login days ago:'+days2);
 			engine.finding.increment();
 
             addUser(member.getValue('user'), 'group:' + groupName);
@@ -1086,6 +1120,149 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 ---
 
 ## Level 2
+
+### Active users with local DB logins
+
+**What:** Queries sys_user_login_history for login events in the last 30 days where authentication_method_used is DB (local database authentication). Filters to active users whose record lives in the base sys_user table (sys_class_name = sys_user, excluding extensions). Reports each user once with their most recent local login timestamp.
+
+**Why:** When SSO is the expected authentication method, local DB logins indicate accounts bypassing centralized identity controls. This can mean SSO misconfiguration, break-glass accounts being used routinely, or credentials that exist outside the identity provider's governance. Local logins undermine MFA enforcement, session policy, and audit trail consistency. NIST IA-2 requires unique identification and authentication through centralized mechanisms, and IA-5 requires centralized credential management.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+
+var seen = {};
+
+
+var loginHistory = new GlideRecord('sys_user_login_history');
+loginHistory.addQuery('authentication_method_used', 'DB');
+loginHistory.addEncodedQuery('sys_created_onONLast 30 days@javascript:gs.beginningOfLast30Days()@javascript:gs.endOfLast30Days()');
+loginHistory.query();
+
+while (loginHistory.next()) {
+  
+    var userSysId = loginHistory.getValue('user');
+    if (!userSysId) continue;
+
+    // Deduplicate — report each user once with their most recent login
+    if (seen[userSysId]) continue;
+
+    var userRec = new GlideRecord('sys_user');
+    if (!userRec.get(userSysId)) continue;
+
+    // Only flag users whose record lives in the base sys_user table
+    var className = userRec.getValue('sys_class_name');
+    if (className && className !== 'sys_user') continue;
+
+    // Skip inactive users — only care about active accounts still logging in locally
+    if (userRec.getValue('active') != '1') continue;
+
+	// If we get this far, log user to the dedupe object and proceed to flag finding.
+    seen[userSysId] = true;
+
+    var loginTime = loginHistory.getValue('login_time');
+    var userName = userRec.getValue('user_name');
+    var displayName = userRec.getValue('name');
+
+    engine.finding.setCurrentSource(userRec);
+    engine.finding.setValue('finding_details', 'Locally DB login at: ' + loginTime);
+    engine.finding.increment();
+}
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Users logging in with local DB authentication
+
+**What:** Queries sys_user_login_history for login events where the type is DB (local database authentication) and the associated user record exists in the base sys_user table (sys_class_name = sys_user, not an extension). Reports each user once with their most recent local login timestamp.
+
+**Why:** When SSO is the expected authentication method, local DB logins indicate accounts bypassing centralized authentication controls. This can mean SSO misconfiguration, emergency break-glass accounts being used routinely, or credentials that exist outside of the identity provider's governance. NIST IA-2 and IA-5 require centralized credential management, and local logins undermine MFA enforcement, session policy, and audit trail consistency.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+
+    // Find users logging in locally (type=DB) where the user record
+    // is in the base sys_user table (not an extension)
+    var loginHistory = new GlideRecord('sys_user_login_history');
+    loginHistory.addQuery('type', 'DB');
+    loginHistory.orderByDesc('login_time');
+    loginHistory.query();
+
+    var seen = {};
+
+    while (loginHistory.next()) {
+        var userSysId = loginHistory.getValue('user');
+        if (!userSysId) continue;
+
+        // Deduplicate — report each user once with their most recent login
+        if (seen[userSysId]) continue;
+
+        var userRec = new GlideRecord('sys_user');
+        if (!userRec.get(userSysId)) continue;
+
+        // Only flag users whose record lives in the base sys_user table
+        var className = userRec.getValue('sys_class_name');
+        if (className && className !== 'sys_user') continue;
+
+        // Skip inactive users — only care about active accounts still logging in locally
+        if (userRec.getValue('active') != 'true') continue;
+
+        seen[userSysId] = true;
+
+        var loginTime = loginHistory.getValue('login_time');
+        var userName = userRec.getValue('user_name');
+        var displayName = userRec.getValue('name');
+
+        engine.finding.setCurrentSource(userRec);
+        engine.finding.setValue('finding_details',
+            'User ' + userName + ' (' + displayName + ')' +
+            ' logged in locally (DB auth) on ' + loginTime);
+        engine.finding.increment();
+    }
+
+})(engine);
+```
+
+</details>
+
+---
+
+### Role Management v2 plugin not installed
+
+**What:** Checks whether the Role Management v2 plugin (com.glide.role_management.inh_count) is installed on the instance. This plugin introduces inheritance-based role counting, improved role hierarchy visibility, and tighter controls over role propagation.
+
+**Why:** Role Management v2 replaces the legacy role inheritance model with one that provides accurate counts of inherited roles, prevents unintended privilege propagation through role hierarchy, and enables administrators to identify over-provisioned accounts more effectively. Without it, role inheritance is opaque and difficult to audit, making least-privilege enforcement unreliable. NIST AC-6 requires that organizations enforce least privilege, and Role Management v2 provides the platform capabilities to do so at scale.
+
+<details>
+<summary>View Script</summary>
+
+```javascript
+(function(engine) {
+
+    if (!GlidePluginManager.isRegistered('com.glide.role_management.inh_count')) {
+
+        //engine.finding.setCurrentSource(scheduledJob);
+        engine.finding.setValue('finding_details', 'Risk Management v2 plugin is not installed. Consider installing.');
+        engine.finding.increment();
+
+    }
+
+
+})(engine);
+```
+
+</details>
+
+---
 
 ### Users with security_admin
 
@@ -1306,6 +1483,8 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
 <summary>View Script</summary>
 
 ```javascript
+// Additional finding details added, needs further debugging (known issue: 0 items found every time) Apr 2026
+
 (function(engine) {
 
     var secAdminUsers = {};
@@ -1345,7 +1524,7 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
         secAdminUsernames.push(u);
     }
 
-    gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
+    // gs.info('security_admin population: ' + secAdminUsernames.length + ' users');
 
     var highRiskRoles = ['admin', 'security_admin', 'impersonator'];
     var roleGrantTables = ['sys_user_has_role', 'sys_group_has_role'];
@@ -1402,14 +1581,25 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     var highRiskGrants = [];
     var selfGrants = [];
     for (var k = 0; k < roleGrants.length; k++) {
-        if (roleGrants[k].is_self_grant) selfGrants.push(roleGrants[k]);
+        if (roleGrants[k].is_self_grant){
+			selfGrants.push(roleGrants[k]);
+
+			var grantedByUser = roleGrants[k].granted_by_display;
+			var roleRec = new GlideRecord('sys_user_role');
+			roleRec.get('name',roleGrants[k].role_granted);
+
+			engine.finding.setCurrentSource(roleRec);
+            engine.finding.setValue('finding_details', 'Role self-granted by user: '+grantedByUser);
+            engine.finding.increment();
+
+		} 
         if (roleGrants[k].is_high_risk_role) highRiskGrants.push(roleGrants[k]);
     }
 
-    gs.info('Total role grants by security_admin users (last 30 days): ' + roleGrants.length);
-    gs.info('High risk role grants (admin/security_admin/impersonator): ' + highRiskGrants.length);
-    gs.info('Self grants: ' + selfGrants.length);
-    gs.info(JSON.stringify(roleGrants, null, 2));
+    // gs.info('Total role grants by security_admin users (last 30 days): ' + roleGrants.length);
+    // gs.info('High risk role grants (admin/security_admin/impersonator): ' + highRiskGrants.length);
+    // gs.info('Self grants: ' + selfGrants.length);
+    // gs.info(JSON.stringify(roleGrants, null, 2));
 
 })(engine);
 ```
@@ -1666,7 +1856,8 @@ Source files are organized by suite in [`scans/`](scans/) (`.js` for scripts, `.
     // Query active ACLs with no condition and no script
     var aclRecord = new GlideRecord('sys_security_acl');
     aclRecord.addQuery('active', 'true');
-    aclRecord.addNullQuery('condition');
+	aclRecord.addNullQuery('condition');
+    aclRecord.addNullQuery('security_attribute');
     aclRecord.addNullQuery('script');
     aclRecord.addQuery('sys_policy', '!=', 'read'); // Exclude read-only locked OOB records
     aclRecord.query();

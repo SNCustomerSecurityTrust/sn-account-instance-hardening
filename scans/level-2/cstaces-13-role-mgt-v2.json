@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Checks whether the Role Management v2 plugin (com.glide.role_management.inh_count) is installed on the instance. This plugin introduces inheritance-based role counting, improved role hierarchy visibility, and tighter controls over role propagation.\n\nWhy: Role Management v2 replaces the legacy role inheritance model with one that provides accurate counts of inherited roles, prevents unintended privilege propagation through role hierarchy, and enables administrators to identify over-provisioned accounts more effectively. Without it, role inheritance is opaque and difficult to audit, making least-privilege enforcement unreliable. NIST AC-6 requires that organizations enforce least privilege, and Role Management v2 provides the platform capabilities to do so at scale.",
+  "documentation_url": "https://www.servicenow.com/docs/r/platform-security/access-control/Role-Mgmt-V2-Upgrade.html",
+  "finding_type": "scan_finding",
+  "name": "cstaces-13 role mgt v2",
+  "priority": 4,
+  "resolution_details": "Install the Role Management v2 plugin (com.glide.role_management.inh_count) via the ServiceNow Plugin Manager. Before activation, review the upgrade guide to understand changes to role inheritance behavior. Test in a sub-production instance first, as the plugin changes how inherited roles are counted and displayed. After activation, review role hierarchies for any unintended privilege propagation and update role assignments as needed.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Role Management v2 plugin not installed",
+  "sys_id": "a0c1ae382f5087100fe9f74fafa4e3af",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level 2"
+}

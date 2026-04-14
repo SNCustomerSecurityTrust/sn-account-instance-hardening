@@ -1,7 +1,7 @@
 {
   "active": true,
   "category": "security",
-  "description": "What: Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 60 days as highest reactivation risk.\r\n\r\nWhy: If a deprovisioned account is reactivated (intentionally or accidentally), elevated access is immediately restored without requiring a new approval. This is a common gap in offboarding processes and violates NIST AC-2(3) requirements for disabling inactive accounts and revoking associated authorizations.",
+  "description": "What: Identifies inactive users who still retain privileged role assignments. Separates direct assignments (critical) from inherited ones (high), and flags accounts deactivated within the last 60 days as highest reactivation risk.\n\nWhy: If a deprovisioned account is reactivated (intentionally or accidentally), elevated access is immediately restored without requiring a new approval. This is a common gap in offboarding processes and violates NIST AC-2(3) requirements for disabling inactive accounts and revoking associated authorizations.",
   "documentation_url": "https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB0999382",
   "finding_type": "scan_finding",
   "name": "cstaces-1c deprovioned 60newer",

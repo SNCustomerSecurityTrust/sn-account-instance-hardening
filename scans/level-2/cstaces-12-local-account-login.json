@@ -1,0 +1,18 @@
+{
+  "active": true,
+  "category": "security",
+  "description": "What: Queries sys_user_login_history for login events in the last 30 days where authentication_method_used is DB (local database authentication). Filters to active users whose record lives in the base sys_user table (sys_class_name = sys_user, excluding extensions). Reports each user once with their most recent local login timestamp.\n\nWhy: When SSO is the expected authentication method, local DB logins indicate accounts bypassing centralized identity controls. This can mean SSO misconfiguration, break-glass accounts being used routinely, or credentials that exist outside the identity provider's governance. Local logins undermine MFA enforcement, session policy, and audit trail consistency. NIST IA-2 requires unique identification and authentication through centralized mechanisms, and IA-5 requires centralized credential management.",
+  "documentation_url": "https://www.servicenow.com/docs/bundle/washingtondc-platform-security/page/administer/login/concept/user-authentication.html",
+  "finding_type": "scan_finding",
+  "name": "cstaces-12 local-account-login",
+  "priority": 3,
+  "resolution_details": "Review each user logging in via local DB authentication. Determine whether local login is intentional (e.g., break-glass admin accounts) or indicates an SSO configuration gap. For accounts that should use SSO, verify the user's identity provider mapping and disable local password authentication. For legitimate local accounts, ensure MFA is enabled and document the business justification. Consider enforcing SSO redirection via the glide.authenticate.multisso.redirect_to_sso system property.",
+  "run_condition": "",
+  "score_max": 100,
+  "score_min": 0,
+  "score_scale": 1,
+  "short_description": "Active users with local DB logins",
+  "sys_id": "439709272f0043948ff1641bcfa4e3e5",
+  "sys_class_name": "scan_script_only_check",
+  "suite": "Level 2"
+}

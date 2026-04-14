@@ -35,8 +35,17 @@
     while (direct.next()) {
 
 		var userRec = direct.user.getRefRecord();
+
+		var userLastLogin = userRec.getValue('last_login');
+		var timeStart = new GlideDateTime(userLastLogin);
+		var timeNow = new GlideDateTime();
+		var durRaw = GlideDateTime.subtract(timeStart,timeNow); 
+		var daysRaw = durRaw.numericValue / 1000 / 60 / 60 / 24;
+		var days = Math.floor(daysRaw);
+
+
 		engine.finding.setCurrentSource(userRec);
-		engine.finding.setValue('finding_details', 'User found with DIRECT security_admin role assignment');
+		engine.finding.setValue('finding_details', 'User found with DIRECT security_admin role assignment. Last login days ago:'+days);
 		engine.finding.increment();
 
         addUser(direct.getValue('user'), 'direct:security_admin');
@@ -54,8 +63,16 @@
         while (member.next()) {
 
 			var userRec2 = groupRole.user.getRefRecord();
+
+			var userLastLogin2 = userRec.getValue('last_login');
+			var timeStart2 = new GlideDateTime(userLastLogin2);
+			var timeNow2 = new GlideDateTime();
+			var durRaw2 = GlideDateTime.subtract(timeStart2,timeNow); 
+			var daysRaw2 = durRaw.numericValue / 1000 / 60 / 60 / 24;
+			var days2 = Math.floor(daysRaw2);
+
 			engine.finding.setCurrentSource(userRec2);
-			engine.finding.setValue('finding_details', 'Found with NESTED security_admin role via:'+groupName);
+			engine.finding.setValue('finding_details', 'Found with NESTED security_admin role via:'+groupName + 'Last login days ago:'+days2);
 			engine.finding.increment();
 
             addUser(member.getValue('user'), 'group:' + groupName);
