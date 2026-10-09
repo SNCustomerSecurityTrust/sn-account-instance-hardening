@@ -35,4 +35,18 @@ export interface CheckSummary {
   suite: string;
   active: boolean;
   sys_id: string;
+  tactics?: string[];
+  techniques?: AttackTechnique[];
+}
+
+export interface AttackTechnique {
+  id: string;
+  name: string;
+}
+
+export interface AttackMapping {
+  tactics: string[];
+  techniques: AttackTechnique[];
+  rationale: string;
+  best_practice: string;
 }

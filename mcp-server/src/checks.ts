@@ -1,12 +1,16 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, basename, extname } from "node:path";
 import type { CheckEntry, CheckSummary } from "./types.js";
+import type { AttackMappingsRepo } from "./attackMappings.js";
 
 export class ChecksRepo {
   private entries: CheckEntry[] = [];
   private loadedAt = 0;
 
-  constructor(private readonly scansDir: string) {}
+  constructor(
+    private readonly scansDir: string,
+    private readonly attackMappings?: AttackMappingsRepo,
+  ) {}
 
   private load(): void {
     const levels = readdirSync(this.scansDir, { withFileTypes: true })
@@ -76,9 +80,13 @@ export class ChecksRepo {
     maxPriority?: number;
     activeOnly?: boolean;
     query?: string;
+    tactic?: string;
+    technique?: string;
   }): CheckSummary[] {
     this.ensureLoaded();
     const q = filter.query?.toLowerCase();
+    const tactic = filter.tactic?.toLowerCase();
+    const technique = filter.technique?.toLowerCase();
 
     return this.entries
       .filter((e) => !filter.level || e.level === filter.level)
@@ -91,6 +99,20 @@ export class ChecksRepo {
         if (!q) return true;
         const haystack = `${e.meta.name} ${e.meta.short_description} ${e.meta.description}`.toLowerCase();
         return haystack.includes(q);
+      })
+      .filter((e) => {
+        if (!tactic) return true;
+        const mapping = this.attackMappings?.get(e.level, e.id);
+        return mapping?.tactics.some((t) => t.toLowerCase().includes(tactic)) ?? false;
+      })
+      .filter((e) => {
+        if (!technique) return true;
+        const mapping = this.attackMappings?.get(e.level, e.id);
+        return (
+          mapping?.techniques.some(
+            (t) => t.id.toLowerCase().includes(technique) || t.name.toLowerCase().includes(technique),
+          ) ?? false
+        );
       })
       .map((e) => this.toSummary(e))
       .sort((a, b) => a.id.localeCompare(b.id));
@@ -127,6 +149,7 @@ export class ChecksRepo {
   }
 
   private toSummary(e: CheckEntry): CheckSummary {
+    const mapping = this.attackMappings?.get(e.level, e.id);
     return {
       id: e.id,
       level: e.level,
@@ -137,6 +160,7 @@ export class ChecksRepo {
       suite: e.meta.suite,
       active: e.meta.active,
       sys_id: e.meta.sys_id,
+      ...(mapping ? { tactics: mapping.tactics, techniques: mapping.techniques } : {}),
     };
   }
 }
