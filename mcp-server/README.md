@@ -31,6 +31,9 @@ ATTACK_MAPPINGS_PATH=/path/to/attack-mappings.json npm start
 
 ## Tools
 
+- `connect_instance` — authenticate to a client's ServiceNow instance via OAuth 2.0 Client Credentials and verify connectivity (see "Connecting to a client instance" below). Does not yet fetch live scan findings — connectivity verification only.
+- `connection_status` — report whether there's an active, non-expired connection, and to which instance, without exposing credentials.
+- `disconnect_instance` — discard the cached OAuth token.
 - `list_levels` — list the scan suites and how many checks each contains.
 - `list_checks` — list checks, filterable by level, category, suite, priority range, active status, keyword, ATT&CK tactic, or ATT&CK technique.
 - `search_checks` — full-text search across name/description/resolution details.
@@ -65,6 +68,25 @@ Renders a self-contained, filterable HTML reference (grouped by priority tier,
 with ATT&CK tactic coverage and best-practice guidance per check) from
 `scripts/report-template.html` + the current `scans/` + `data/attack-mappings.json`.
 `reports/` is gitignored since it's a regenerable build artifact.
+
+## Connecting to a client's ServiceNow instance
+
+`connect_instance` takes `instanceUrl`, `clientId`, and (optionally) `clientSecret`,
+performs an OAuth 2.0 Client Credentials grant against that instance's own
+`/oauth_token.do` endpoint using a scoped integration user, and verifies the
+token with a lightweight authenticated API call. The secret is never echoed
+back, logged, or written to disk by this server, and the connection is held
+in memory only for the life of the server process.
+
+**Avoid passing `clientSecret` as a tool argument in an interactive chat** —
+it will land in that conversation's transcript. Instead, supply it to the
+server process via (checked in this order):
+
+1. `SN_CLIENT_SECRET_FILE` — path to a mounted secret file, e.g. a volume
+   populated by an External Secrets Operator / Vault Agent sidecar in
+   Kubernetes. Takes precedence over the env var below.
+2. `SN_CLIENT_SECRET` — the secret directly as an environment variable.
+3. The `clientSecret` tool argument, as a last resort.
 
 ## Connecting from a client
 

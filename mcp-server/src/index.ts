@@ -8,6 +8,28 @@ import { ChecksRepo } from "./checks.js";
 import { AttackMappingsRepo } from "./attackMappings.js";
 import { checkMetaSchema } from "./schema.js";
 import { lintCheckJs } from "./lint.js";
+import { connectInstance, getConnectionStatus, disconnectInstance } from "./snClient.js";
+import { readFileSync } from "node:fs";
+
+function resolveClientSecret(argSecret: string | undefined): { secret?: string; error?: string } {
+  if (argSecret) return { secret: argSecret };
+
+  const secretFile = process.env.SN_CLIENT_SECRET_FILE;
+  if (secretFile) {
+    try {
+      return { secret: readFileSync(secretFile, "utf-8").trim() };
+    } catch (err) {
+      return { error: `Could not read SN_CLIENT_SECRET_FILE ('${secretFile}'): ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  if (process.env.SN_CLIENT_SECRET) return { secret: process.env.SN_CLIENT_SECRET };
+
+  return {
+    error:
+      "No client secret provided. Pass 'clientSecret', set SN_CLIENT_SECRET_FILE to a mounted secret file (e.g. from an External Secrets Operator / Vault volume), or set the SN_CLIENT_SECRET environment variable.",
+  };
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +48,75 @@ const server = new McpServer({
   name: "sn-account-instance-hardening-mcp",
   version: "1.0.0",
 });
+
+server.registerTool(
+  "connect_instance",
+  {
+    title: "Connect to a ServiceNow instance",
+    description:
+      "Authenticate to a client's ServiceNow instance using an OAuth 2.0 Client Credentials grant (instance URL + OAuth client id/secret of a scoped integration user), and verify connectivity. " +
+      "The client secret is sent only to that instance's own /oauth_token.do token endpoint over HTTPS, and is never echoed back, logged, or written to disk by this tool. " +
+      "To avoid typing the secret into a chat transcript, omit 'clientSecret' and instead either (a) mount it as a file (e.g. from an External Secrets Operator / Vault-injected volume) and set SN_CLIENT_SECRET_FILE to that file's path, or (b) set the SN_CLIENT_SECRET environment variable directly, on the process running this MCP server. SN_CLIENT_SECRET_FILE takes precedence over SN_CLIENT_SECRET when both are set. " +
+      "Currently this only establishes and verifies the connection (e.g. for an MCP client to confirm credentials work) — it does not yet fetch live scan findings from the instance.",
+    inputSchema: {
+      instanceUrl: z.string().min(1).describe("e.g. 'https://your-instance.service-now.com' (scheme optional)"),
+      clientId: z.string().min(1).describe("OAuth 2.0 client id of a scoped integration user/application registry entry"),
+      clientSecret: z
+        .string()
+        .optional()
+        .describe(
+          "OAuth 2.0 client secret. Prefer leaving this unset and instead setting SN_CLIENT_SECRET_FILE (a mounted secret file) or SN_CLIENT_SECRET (an env var) on the server process, so the secret never appears in a chat transcript.",
+        ),
+    },
+  },
+  async ({ instanceUrl, clientId, clientSecret }) => {
+    const { secret, error } = resolveClientSecret(clientSecret);
+    if (!secret) {
+      return { isError: true, content: [{ type: "text", text: error ?? "No client secret available." }] };
+    }
+    const result = await connectInstance(instanceUrl, clientId, secret);
+    if (!result.ok) {
+      return { isError: true, content: [{ type: "text", text: `Connection failed: ${result.error}` }] };
+    }
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            { connected: true, instanceUrl: result.instanceUrl, buildName: result.buildName, tokenExpiresAt: result.expiresAt },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  },
+);
+
+server.registerTool(
+  "connection_status",
+  {
+    title: "Check ServiceNow connection status",
+    description: "Report whether connect_instance has an active, non-expired connection, and to which instance — without exposing any credentials.",
+    inputSchema: {},
+  },
+  async () => {
+    return { content: [{ type: "text", text: JSON.stringify(getConnectionStatus(), null, 2) }] };
+  },
+);
+
+server.registerTool(
+  "disconnect_instance",
+  {
+    title: "Disconnect from the ServiceNow instance",
+    description: "Discard the cached OAuth token for the currently connected instance.",
+    inputSchema: {},
+  },
+  async () => {
+    disconnectInstance();
+    return { content: [{ type: "text", text: "Disconnected." }] };
+  },
+);
 
 server.registerTool(
   "list_levels",
