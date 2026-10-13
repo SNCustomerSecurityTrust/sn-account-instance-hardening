@@ -1,0 +1,333 @@
+<title>ATT&CK Hardening Reference</title>
+<meta name="description" content="Prioritized ServiceNow hardening checks mapped to MITRE ATT&CK tactics/techniques and ServiceNow best practices.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef1ef;
+    --surface: #ffffff;
+    --surface-2: #f4f6f4;
+    --ink: #141f1c;
+    --muted: #55655f;
+    --border: #d7ddda;
+    --accent: #0e6b5c;
+    --accent-soft: #e4f1ec;
+    --critical: #a8291f;
+    --critical-soft: #f8e3e0;
+    --high: #b3621a;
+    --high-soft: #f8ecdd;
+    --medium: #8a7116;
+    --medium-soft: #f3efdd;
+    --chip-bg: #eef1ef;
+    --chip-ink: #3b4a44;
+    --shadow: 0 1px 2px rgba(20,31,28,0.06), 0 8px 24px -12px rgba(20,31,28,0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0c1413;
+      --surface: #121c1a;
+      --surface-2: #17221f;
+      --ink: #e7ede9;
+      --muted: #9bb0a9;
+      --border: #263430;
+      --accent: #3fcdab;
+      --accent-soft: #15302a;
+      --critical: #ff7a6b;
+      --critical-soft: #341d1a;
+      --high: #ffb066;
+      --high-soft: #332712;
+      --medium: #e9cd6c;
+      --medium-soft: #302c14;
+      --chip-bg: #1c2825;
+      --chip-ink: #bcccc5;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -16px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0c1413;
+    --surface: #121c1a;
+    --surface-2: #17221f;
+    --ink: #e7ede9;
+    --muted: #9bb0a9;
+    --border: #263430;
+    --accent: #3fcdab;
+    --accent-soft: #15302a;
+    --critical: #ff7a6b;
+    --critical-soft: #341d1a;
+    --high: #ffb066;
+    --high-soft: #332712;
+    --medium: #e9cd6c;
+    --medium-soft: #302c14;
+    --chip-bg: #1c2825;
+    --chip-ink: #bcccc5;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -16px rgba(0,0,0,0.6);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 64px; }
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  h1, h2, h3 { font-family: "Newsreader", Georgia, serif; font-weight: 600; margin: 0; text-wrap: balance; }
+
+  header.page { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+  .eyebrow { font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin-bottom: 10px; }
+  header.page h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.1; }
+  header.page p.sub { color: var(--muted); max-width: 640px; margin-top: 12px; font-size: 15.5px; }
+  .meta-row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 18px; font-size: 13px; color: var(--muted); }
+  .meta-row b { color: var(--ink); font-weight: 600; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 32px; }
+  .stat-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .stat-tile .n { font-family: "Newsreader", serif; font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat-tile .l { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+  .stat-tile.crit .n { color: var(--critical); }
+  .stat-tile.high .n { color: var(--high); }
+  .stat-tile.med .n { color: var(--medium); }
+
+  section.block { margin-bottom: 36px; }
+  section.block h2 { font-size: 20px; margin-bottom: 14px; }
+
+  .tactics-chart { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 9px; }
+  .tactic-row { display: grid; grid-template-columns: 160px 1fr 34px; align-items: center; gap: 10px; font-size: 13px; }
+  .tactic-row .track { background: var(--surface-2); border-radius: 5px; height: 10px; overflow: hidden; }
+  .tactic-row .fill { height: 100%; background: var(--accent); border-radius: 5px; }
+  .tactic-row .count { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tactic-row .name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .controls input[type="search"] {
+    flex: 1 1 220px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); color: var(--ink); font-size: 13.5px; font-family: inherit;
+  }
+  .pill-btn {
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 500; cursor: pointer;
+    font-family: inherit;
+  }
+  .pill-btn[aria-pressed="true"] { background: var(--accent); color: #ffffff; border-color: var(--accent); }
+  .pill-btn.crit[aria-pressed="true"] { background: var(--critical); border-color: var(--critical); }
+  .pill-btn.high[aria-pressed="true"] { background: var(--high); border-color: var(--high); }
+  .pill-btn.med[aria-pressed="true"] { background: var(--medium); border-color: var(--medium); }
+
+  .tier-heading { display: flex; align-items: baseline; gap: 10px; margin: 26px 0 12px; }
+  .tier-heading .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .tier-heading h3 { font-size: 17px; }
+  .tier-heading .count { color: var(--muted); font-size: 13px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 10px; box-shadow: var(--shadow);
+  }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; cursor: pointer; }
+  .card-head h4 { font-family: "IBM Plex Sans"; font-weight: 600; font-size: 15px; margin: 0; }
+  .card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--chip-bg); color: var(--chip-ink); font-weight: 500; white-space: nowrap; }
+  .tag.level { font-family: "IBM Plex Mono"; }
+  .chev { color: var(--muted); font-size: 13px; flex: none; margin-top: 2px; transition: transform 0.15s ease; }
+  .card.open .chev { transform: rotate(90deg); }
+  .card-body { display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .card.open .card-body { display: block; }
+
+  .attck-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .attck-chip {
+    font-size: 11.5px; font-weight: 500; padding: 3px 9px; border-radius: 6px;
+    background: var(--accent-soft); color: var(--accent); display: inline-flex; gap: 5px; align-items: baseline;
+  }
+  .attck-chip .id { font-family: "IBM Plex Mono"; font-weight: 600; }
+
+  .field { margin-bottom: 11px; }
+  .field .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
+  .field .v { font-size: 13.8px; }
+  .field .v a { color: var(--accent); text-decoration: none; border-bottom: 1px solid currentColor; }
+
+  footer.page { border-top: 1px solid var(--border); margin-top: 40px; padding-top: 20px; color: var(--muted); font-size: 12.5px; }
+  footer.page p { margin: 0 0 8px; }
+  #empty { display: none; color: var(--muted); font-size: 13.5px; padding: 20px 0; }
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <div class="eyebrow">sn-account-instance-hardening &middot; Reference catalog</div>
+    <h1>ServiceNow Hardening — ATT&CK Remediation Reference</h1>
+    <p class="sub">Every check in this repo's scan catalog, mapped to the MITRE ATT&amp;CK tactics and techniques it defends against, with ServiceNow-specific best-practice remediation — ordered by scan priority so a team can work top-down.</p>
+    <div class="meta-row">
+      <span><b id="stat-total">0</b> checks catalogued</span>
+      <span><b id="stat-techniques">0</b> distinct ATT&CK techniques</span>
+      <span><b id="stat-tactics">0</b> tactics covered</span>
+    </div>
+  </header>
+
+  <section class="block">
+    <div class="stat-grid" id="severity-tiles"></div>
+  </section>
+
+  <section class="block">
+    <h2>Tactic coverage</h2>
+    <div class="tactics-chart" id="tactic-chart"></div>
+  </section>
+
+  <section class="block">
+    <h2>Prioritized checks</h2>
+    <div class="controls">
+      <input type="search" id="search" placeholder="Search checks, techniques, tables…">
+      <button class="pill-btn crit" data-tier="Critical" aria-pressed="false">Critical</button>
+      <button class="pill-btn high" data-tier="High" aria-pressed="false">High</button>
+      <button class="pill-btn med" data-tier="Medium" aria-pressed="false">Medium</button>
+    </div>
+    <div id="list"></div>
+    <p id="empty">No checks match this filter.</p>
+  </section>
+
+  <footer class="page">
+    <p><b>Scope note:</b> this reference enriches the static check catalog — it is not a report of findings from a specific client instance. Pair it with real scan results (which checks actually fired and against what) to produce a client-specific, prioritized remediation plan.</p>
+    <p id="methodology"></p>
+    <p id="methodology-text" hidden>Each check is mapped to the ATT&amp;CK tactic(s)/technique(s) that the underlying misconfiguration most directly enables or resembles, following the common practice of crosswalking security controls to ATT&amp;CK. These are practitioner-level, best-effort mappings authored for this repo and should be reviewed by a security analyst before being presented as authoritative in a client deliverable.</p>
+    <p>Generated from <code>scans/</code> and <code>mcp-server/data/attack-mappings.json</code> in <a href="https://github.com/SNCustomerSecurityTrust/sn-account-instance-hardening" style="color:var(--accent)">SNCustomerSecurityTrust/sn-account-instance-hardening</a>.</p>
+  </footer>
+</div>
+
+<script id="report-data" type="application/json">__REPORT_DATA__</script>
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById('report-data').textContent);
+
+  function tierFor(priority) {
+    if (priority <= 2) return 'Critical';
+    if (priority === 3) return 'High';
+    return 'Medium';
+  }
+  const tierColorVar = { Critical: '--critical', High: '--high', Medium: '--medium' };
+
+  data.forEach((d) => { d.tier = tierFor(d.meta.priority); });
+
+  // Stats
+  document.getElementById('stat-total').textContent = data.length;
+  const techSet = new Map();
+  const tacticCount = new Map();
+  data.forEach((d) => {
+    (d.mapping?.techniques || []).forEach((t) => techSet.set(t.id, t.name));
+    (d.mapping?.tactics || []).forEach((t) => tacticCount.set(t, (tacticCount.get(t) || 0) + 1));
+  });
+  document.getElementById('stat-techniques').textContent = techSet.size;
+  document.getElementById('stat-tactics').textContent = tacticCount.size;
+  document.getElementById('methodology').textContent =
+    "Methodology: " + (document.getElementById('methodology-text')?.textContent || '');
+
+  // Severity tiles
+  const tiers = ['Critical', 'High', 'Medium'];
+  const tileWrap = document.getElementById('severity-tiles');
+  tiers.forEach((tier) => {
+    const n = data.filter((d) => d.tier === tier).length;
+    const div = document.createElement('div');
+    div.className = 'stat-tile ' + tier.toLowerCase().slice(0, 4).replace('crit','crit').replace('high','high').replace('medi','med');
+    div.innerHTML = `<div class="n">${n}</div><div class="l">${tier} priority checks</div>`;
+    tileWrap.appendChild(div);
+  });
+
+  // Tactic chart
+  const chart = document.getElementById('tactic-chart');
+  const maxCount = Math.max(...tacticCount.values());
+  [...tacticCount.entries()].sort((a, b) => b[1] - a[1]).forEach(([tactic, count]) => {
+    const row = document.createElement('div');
+    row.className = 'tactic-row';
+    row.innerHTML = `
+      <div class="name">${tactic}</div>
+      <div class="track"><div class="fill" style="width:${(count / maxCount) * 100}%"></div></div>
+      <div class="count">${count}</div>`;
+    chart.appendChild(row);
+  });
+
+  // List
+  const list = document.getElementById('list');
+  const empty = document.getElementById('empty');
+  const search = document.getElementById('search');
+  const tierButtons = [...document.querySelectorAll('.pill-btn')];
+  let activeTiers = new Set();
+
+  function levelLabel(level) {
+    return level.replace('level-', 'Level ').replace('-', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function render() {
+    const q = search.value.trim().toLowerCase();
+    list.innerHTML = '';
+    let shown = 0;
+
+    tiers.forEach((tier) => {
+      if (activeTiers.size && !activeTiers.has(tier)) return;
+      const items = data.filter((d) => {
+        if (d.tier !== tier) return false;
+        if (!q) return true;
+        const hay = [
+          d.meta.short_description, d.meta.name, d.meta.category, d.level,
+          ...(d.mapping?.techniques || []).flatMap((t) => [t.id, t.name]),
+          ...(d.mapping?.tactics || []),
+        ].join(' ').toLowerCase();
+        return hay.includes(q);
+      });
+      if (!items.length) return;
+
+      const heading = document.createElement('div');
+      heading.className = 'tier-heading';
+      heading.innerHTML = `<span class="dot" style="background:var(${tierColorVar[tier]})"></span><h3>${tier}</h3><span class="count">${items.length} check${items.length === 1 ? '' : 's'}</span>`;
+      list.appendChild(heading);
+
+      items.forEach((d) => {
+        shown++;
+        const card = document.createElement('div');
+        card.className = 'card';
+        const techChips = (d.mapping?.techniques || [])
+          .map((t) => `<span class="attck-chip"><span class="id">${t.id}</span>${escapeHtml(t.name)}</span>`)
+          .join('');
+        card.innerHTML = `
+          <div class="card-head">
+            <div>
+              <h4>${escapeHtml(d.meta.short_description)}</h4>
+              <div class="card-tags">
+                <span class="tag level">${levelLabel(d.level)}</span>
+                <span class="tag">${escapeHtml(d.meta.category)}</span>
+                ${(d.mapping?.tactics || []).map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
+              </div>
+            </div>
+            <span class="chev">▸</span>
+          </div>
+          <div class="card-body">
+            <div class="attck-row">${techChips}</div>
+            <div class="field"><div class="k">Why it matters</div><div class="v">${escapeHtml(d.mapping?.rationale || '')}</div></div>
+            <div class="field"><div class="k">ServiceNow best practice</div><div class="v">${escapeHtml(d.mapping?.best_practice || '')}</div></div>
+            <div class="field"><div class="k">Remediation detail</div><div class="v">${escapeHtml(d.meta.resolution_details)}</div></div>
+            <div class="field"><div class="k">Reference</div><div class="v"><a href="${escapeHtml(d.meta.documentation_url)}" target="_blank" rel="noopener">ServiceNow documentation ↗</a> &nbsp;·&nbsp; <span class="mono">${escapeHtml(d.id)}</span></div></div>
+          </div>`;
+        card.querySelector('.card-head').addEventListener('click', () => card.classList.toggle('open'));
+        list.appendChild(card);
+      });
+    });
+
+    empty.style.display = shown ? 'none' : 'block';
+  }
+
+  tierButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tier = btn.dataset.tier;
+      if (activeTiers.has(tier)) { activeTiers.delete(tier); btn.setAttribute('aria-pressed', 'false'); }
+      else { activeTiers.add(tier); btn.setAttribute('aria-pressed', 'true'); }
+      render();
+    });
+  });
+  search.addEventListener('input', render);
+
+  render();
+})();
+</script>

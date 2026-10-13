@@ -1,0 +1,25 @@
+{
+  "name": "sn-account-instance-hardening-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for browsing, searching, and validating sn-account-instance-hardening scan checks",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "sn-hardening-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch",
+    "report": "node scripts/generate-report.mjs"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^7.0.2"
+  }
+}

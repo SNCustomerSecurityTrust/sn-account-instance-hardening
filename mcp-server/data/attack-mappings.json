@@ -1,0 +1,368 @@
+{
+  "_meta": {
+    "description": "MITRE ATT&CK (Enterprise) mapping and ServiceNow best-practice guidance for each check in scans/. Keyed by '<level>/<id>' matching the MCP server's check ids.",
+    "methodology": "Each check is mapped to the ATT&CK tactic(s)/technique(s) that the underlying misconfiguration most directly enables or resembles, following the common practice of crosswalking security controls to ATT&CK (as CIS Controls and NIST mappings do). These are practitioner-level, best-effort mappings authored for this repo and should be reviewed by a security analyst before being presented as authoritative in a client deliverable.",
+    "attack_version": "Enterprise ATT&CK (techniques current as of v15/v16)"
+  },
+  "level-1/cstaces-1a-admin-users": {
+    "tactics": ["Privilege Escalation", "Persistence"],
+    "techniques": [
+      { "id": "T1078", "name": "Valid Accounts" },
+      { "id": "T1098", "name": "Account Manipulation" }
+    ],
+    "rationale": "Unreviewed, excessive admin/security_admin/user_admin assignment is the precondition attackers exploit via valid-account abuse and role manipulation to gain and keep privileged access.",
+    "best_practice": "Apply least privilege: limit admin/security_admin/user_admin to a named, documented set of individuals; run quarterly access certification; move service accounts to scoped roles."
+  },
+  "level-1/cstaces-1b-multiple-high": {
+    "tactics": ["Privilege Escalation"],
+    "techniques": [
+      { "id": "T1078", "name": "Valid Accounts" },
+      { "id": "T1098.003", "name": "Account Manipulation: Additional Cloud Roles" }
+    ],
+    "rationale": "Stacking multiple high-privilege roles on one account increases blast radius if that single account is compromised.",
+    "best_practice": "Assign the minimum single role needed per function; avoid combining admin with security_admin/user_admin on the same account."
+  },
+  "level-1/cstaces-1c-deprovioned-60newer": {
+    "tactics": ["Persistence", "Initial Access"],
+    "techniques": [{ "id": "T1078", "name": "Valid Accounts" }],
+    "rationale": "Recently inactive accounts that retain elevated roles are prime targets for credential reuse before deprovisioning catches up.",
+    "best_practice": "Automate role revocation as part of the deactivation workflow; don't wait for a separate cleanup pass."
+  },
+  "level-1/cstaces-1c2-deprovsioned-60older": {
+    "tactics": ["Persistence"],
+    "techniques": [
+      { "id": "T1078", "name": "Valid Accounts" },
+      { "id": "T1078.001", "name": "Valid Accounts: Default Accounts" }
+    ],
+    "rationale": "Elevated roles left on accounts inactive for more than 60 days represent long-lived, unmonitored persistence opportunities.",
+    "best_practice": "Treat this as a hard SLA breach; auto-revoke privileged roles from any account inactive beyond your deprovisioning window."
+  },
+  "level-1/cstaces-3b-has-impersonator": {
+    "tactics": ["Privilege Escalation", "Defense Evasion"],
+    "techniques": [
+      { "id": "T1134", "name": "Access Token Manipulation" },
+      { "id": "T1078", "name": "Valid Accounts" }
+    ],
+    "rationale": "Impersonation lets a compromised account operate as any other user, masking attacker activity under a victim's identity.",
+    "best_practice": "Restrict the impersonator role to a tiny, audited set of admins; log and alert on every impersonation session."
+  },
+  "level-1/cstaces-3b2-nested-impersonator": {
+    "tactics": ["Privilege Escalation", "Defense Evasion"],
+    "techniques": [
+      { "id": "T1134", "name": "Access Token Manipulation" },
+      { "id": "T1098", "name": "Account Manipulation" }
+    ],
+    "rationale": "Impersonation granted transitively through group/role inheritance is easy to miss in access reviews and creates the same risk as direct grants.",
+    "best_practice": "Review role inheritance chains, not just direct grants, when auditing impersonation rights."
+  },
+  "level-1/cstaces-4a-secadmin": {
+    "tactics": ["Privilege Escalation"],
+    "techniques": [
+      { "id": "T1078", "name": "Valid Accounts" },
+      { "id": "T1098", "name": "Account Manipulation" }
+    ],
+    "rationale": "security_admin can modify ACLs and security controls directly, making it one of the highest-value roles to compromise or abuse.",
+    "best_practice": "Limit security_admin to platform security owners; require change-control review for any security_admin grant."
+  },
+  "level-1/cstaces-5a-integration-admins": {
+    "tactics": ["Persistence", "Privilege Escalation", "Initial Access"],
+    "techniques": [{ "id": "T1078", "name": "Valid Accounts" }],
+    "rationale": "Integration/service accounts with admin rights and long-lived credentials are high-value, low-visibility targets — compromise gives silent, broad access without an interactive login to flag.",
+    "best_practice": "Scope integration users to the specific tables/APIs they need via scoped roles, not admin; rotate their credentials regularly."
+  },
+  "level-2/cstaces-12-local-account-login": {
+    "tactics": ["Defense Evasion", "Persistence", "Initial Access"],
+    "techniques": [
+      { "id": "T1556", "name": "Modify Authentication Process" },
+      { "id": "T1078.003", "name": "Valid Accounts: Local Accounts" }
+    ],
+    "rationale": "Local DB logins bypass SSO/MFA enforcement, giving attackers a weaker authentication path that isn't governed by the identity provider.",
+    "best_practice": "Enforce SSO redirection (glide.authenticate.multisso.redirect_to_sso); limit local auth to documented break-glass accounts with MFA."
+  },
+  "level-2/cstaces-13-role-mgt-v2": {
+    "tactics": ["Privilege Escalation"],
+    "techniques": [{ "id": "T1098", "name": "Account Manipulation" }],
+    "rationale": "Without Role Management v2's granular, auditable role administration, over-broad or undocumented role grants are harder to detect and control.",
+    "best_practice": "Install and adopt Role Management v2 to get structured, auditable role request/approval workflows instead of ad hoc role assignment."
+  },
+  "level-2/cstaces-4a-secadmin": {
+    "tactics": ["Privilege Escalation"],
+    "techniques": [
+      { "id": "T1078", "name": "Valid Accounts" },
+      { "id": "T1098", "name": "Account Manipulation" }
+    ],
+    "rationale": "security_admin can modify ACLs and security controls directly, making it one of the highest-value roles to compromise or abuse.",
+    "best_practice": "Limit security_admin to platform security owners; require change-control review for any security_admin grant."
+  },
+  "level-2/cstaces-4b-acl-modif": {
+    "tactics": ["Defense Evasion", "Privilege Escalation"],
+    "techniques": [
+      { "id": "T1484", "name": "Domain or Tenant Policy Modification" },
+      { "id": "T1562", "name": "Impair Defenses" }
+    ],
+    "rationale": "Recent, unreviewed ACL/role changes are the platform-security analog of policy/firewall tampering — a common step to widen access or disable controls before further action.",
+    "best_practice": "Route all ACL and role changes through change management; alert on and review ACL/role modifications outside approved change windows."
+  },
+  "level-2/cstaces-4c-self-role-grant": {
+    "tactics": ["Privilege Escalation"],
+    "techniques": [
+      { "id": "T1098", "name": "Account Manipulation" },
+      { "id": "T1548", "name": "Abuse Elevation Control Mechanism" }
+    ],
+    "rationale": "A user granting themselves admin is a direct privilege-escalation action, whether from a compromised account or an insider.",
+    "best_practice": "Require dual control/approval for any role grant, especially self-grants; alert in real time on self-assigned elevated roles."
+  },
+  "level-2/cstaces-4e-encryption-configs": {
+    "tactics": ["Defense Evasion"],
+    "techniques": [{ "id": "T1600", "name": "Weaken Encryption" }],
+    "rationale": "Changes to encryption configuration can silently downgrade protection for data at rest, consistent with adversary attempts to weaken encryption controls.",
+    "best_practice": "Restrict and log access to encryption context/config tables; alert on any modification and validate against your approved encryption standard."
+  },
+  "level-2/cstaces-5b-active-oauth": {
+    "tactics": ["Persistence", "Defense Evasion", "Lateral Movement"],
+    "techniques": [{ "id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token" }],
+    "rationale": "Active OAuth tokens/clients are durable, often long-lived credentials that let an attacker (or former integration) authenticate without a password or MFA prompt.",
+    "best_practice": "Inventory and review all OAuth client/token grants quarterly; revoke unused tokens and set short, enforced expirations."
+  },
+  "level-3/cstaces-2a-acl-overly-perm": {
+    "tactics": ["Privilege Escalation", "Defense Evasion"],
+    "techniques": [
+      { "id": "T1078", "name": "Valid Accounts" },
+      { "id": "T1548", "name": "Abuse Elevation Control Mechanism" }
+    ],
+    "rationale": "Overly permissive ACLs mean a standard, already-valid account can reach data/functions it shouldn't, without needing to escalate further.",
+    "best_practice": "Apply least-privilege ACL design; require explicit role/condition checks instead of broad or missing restrictions."
+  },
+  "level-3/cstaces-2b-acls-dangerous": {
+    "tactics": ["Defense Evasion", "Privilege Escalation"],
+    "techniques": [{ "id": "T1548", "name": "Abuse Elevation Control Mechanism" }],
+    "rationale": "ACLs with risky scripted conditions (e.g., logic that evaluates true unintentionally) can be exploited or misconfigured to bypass intended access restrictions entirely.",
+    "best_practice": "Audit script-based ACL conditions for logic that could evaluate true unintentionally; prefer role/condition-based ACLs over custom scripts where possible."
+  },
+  "level-3/cstaces-8-domsep-users": {
+    "tactics": ["Privilege Escalation", "Collection"],
+    "techniques": [
+      { "id": "T1078", "name": "Valid Accounts" },
+      { "id": "T1484", "name": "Domain or Tenant Policy Modification" }
+    ],
+    "rationale": "Users without a proper domain assignment in a domain-separated instance can see or act across domain boundaries they shouldn't, undermining tenant isolation.",
+    "best_practice": "Ensure every user has an explicit domain assignment; review domain separation inheritance rules so no user defaults to global/top-domain access unintentionally."
+  },
+  "level-knowledge/cstaces-11a-prop-block-no-criteria": {
+    "tactics": ["Collection"],
+    "techniques": [{ "id": "T1213", "name": "Data from Information Repositories" }],
+    "rationale": "If access isn't blocked by default when no user criteria exist, any KB missing explicit criteria becomes open-by-default, exposing its content to unauthorized collection.",
+    "best_practice": "Set glide.knowman.block_access_with_no_user_criteria=true so missing criteria fail closed, not open."
+  },
+  "level-knowledge/cstaces-11b-prop-apply-article-criteria": {
+    "tactics": ["Collection"],
+    "techniques": [{ "id": "T1213", "name": "Data from Information Repositories" }],
+    "rationale": "Without article-level criteria enforcement, KB-level restrictions can be bypassed by reaching individual articles directly.",
+    "best_practice": "Enable glide.knowman.apply_article_read_criteria so article-level access always inherits/enforces user criteria."
+  },
+  "level-knowledge/cstaces-11c-prop-search-role-security": {
+    "tactics": ["Collection"],
+    "techniques": [{ "id": "T1213", "name": "Data from Information Repositories" }],
+    "rationale": "Search indexes that ignore role-based security can surface restricted article content to users who shouldn't see it, via search results instead of direct access.",
+    "best_practice": "Enable glide.knowman.search.apply_role_based_security so search results always respect the same restrictions as direct access."
+  },
+  "level-knowledge/cstaces-11d-prop-show-unpublished": {
+    "tactics": ["Collection"],
+    "techniques": [{ "id": "T1213", "name": "Data from Information Repositories" }],
+    "rationale": "Exposing unpublished/draft articles can leak pre-release, incomplete, or sensitive internal content to users who should only see published, reviewed material.",
+    "best_practice": "Keep glide.knowman.show_unpublished disabled outside controlled authoring/review contexts."
+  },
+  "level-knowledge/cstaces-11e-prop-draft-view-roles": {
+    "tactics": ["Collection"],
+    "techniques": [{ "id": "T1213", "name": "Data from Information Repositories" }],
+    "rationale": "Broad draft-view permissions let more users than intended see in-review content before it's approved.",
+    "best_practice": "Restrict the draft/review view role to knowledge management staff only."
+  },
+  "level-knowledge/cstaces-11f-kb-no-can-read": {
+    "tactics": ["Collection"],
+    "techniques": [{ "id": "T1213", "name": "Data from Information Repositories" }],
+    "rationale": "A KB with no explicit Can Read criteria defaults to open access for anyone who can reach it — the most common root cause of KB data exposure.",
+    "best_practice": "Require every active KB to define at least one Can Read user criteria scoped to its intended audience."
+  },
+  "level-knowledge/cstaces-11g-kb-no-cannot-read": {
+    "tactics": ["Collection"],
+    "techniques": [{ "id": "T1213", "name": "Data from Information Repositories" }],
+    "rationale": "Without an explicit deny list, edge cases (e.g., guest or external users) can fall through to default-allow behavior.",
+    "best_practice": "Pair Can Read with an explicit Cannot Read criteria to deny known-risky populations (guest, external users) regardless of other grants."
+  },
+  "level-knowledge/cstaces-11h-kb-no-can-contrib-oob-is": {
+    "tactics": ["Collection", "Persistence"],
+    "techniques": [
+      { "id": "T1213", "name": "Data from Information Repositories" },
+      { "id": "T1565.001", "name": "Data Manipulation: Stored Data Manipulation" }
+    ],
+    "rationale": "An unrestricted Can Contribute setting lets any authenticated user author/edit KB content, which can be used both to exfiltrate via new articles and to plant misleading or malicious content.",
+    "best_practice": "Scope Can Contribute criteria to authorized authors/contributors only; never leave it empty on an active KB."
+  },
+  "level-knowledge/cstaces-11i-kb-uses-any-user": {
+    "tactics": ["Collection"],
+    "techniques": [{ "id": "T1213", "name": "Data from Information Repositories" }],
+    "rationale": "The 'Any User'/'Any user' criteria effectively disables access control for the KB, equivalent to leaving the content open to collection by anyone in the instance.",
+    "best_practice": "Replace 'Any User'/'Any user' criteria with scoped group- or role-based criteria matching the intended audience."
+  },
+  "level-knowledge/cstaces-11j-kb-guest-not-denied": {
+    "tactics": ["Collection", "Initial Access"],
+    "techniques": [
+      { "id": "T1213", "name": "Data from Information Repositories" },
+      { "id": "T1190", "name": "Exploit Public-Facing Application" }
+    ],
+    "rationale": "If Guest isn't explicitly denied, unauthenticated external visitors may be able to read internal KB content directly.",
+    "best_practice": "Add an explicit Cannot Read criteria for the Guest user on every active knowledge base unless public access is a deliberate, reviewed decision."
+  },
+  "level-knowledge/cstaces-11k-kb-contrib-no-read": {
+    "tactics": ["Collection", "Persistence"],
+    "techniques": [
+      { "id": "T1213", "name": "Data from Information Repositories" },
+      { "id": "T1565.001", "name": "Data Manipulation: Stored Data Manipulation" }
+    ],
+    "rationale": "Granting contribution rights without a matching read restriction means contributors can add or alter content in a KB whose read boundary is undefined or broader than intended.",
+    "best_practice": "Always pair Can Contribute criteria with a matching, equally-scoped Can Read criteria."
+  },
+  "level-knowledge/cstaces-11l-kb-pre-2022-no-guest-deny": {
+    "tactics": ["Collection", "Initial Access"],
+    "techniques": [
+      { "id": "T1213", "name": "Data from Information Repositories" },
+      { "id": "T1190", "name": "Exploit Public-Facing Application" }
+    ],
+    "rationale": "Legacy KBs created before the platform's automatic guest-denial default don't inherit that protection and must be remediated individually.",
+    "best_practice": "Audit and explicitly add Guest denial criteria to every pre-2022 knowledge base; don't assume newer defaults apply retroactively."
+  },
+  "level-knowledge/cstaces-11m-br-guest-user-inactive": {
+    "tactics": ["Defense Evasion", "Collection"],
+    "techniques": [
+      { "id": "T1562", "name": "Impair Defenses" },
+      { "id": "T1213", "name": "Data from Information Repositories" }
+    ],
+    "rationale": "Disabling the business rule that auto-denies Guest access removes a platform-wide safety net in one step, re-exposing every KB that relied on it.",
+    "best_practice": "Keep the Guest User denial Business Rule active; treat any attempt to disable it as a high-priority security event."
+  },
+  "level-knowledge/cstaces-11n-public-kb-pages": {
+    "tactics": ["Initial Access", "Collection"],
+    "techniques": [
+      { "id": "T1190", "name": "Exploit Public-Facing Application" },
+      { "id": "T1213", "name": "Data from Information Repositories" }
+    ],
+    "rationale": "Marking KB view/find/home/list pages as public lets unauthenticated visitors reach knowledge content directly, bypassing portal and user-criteria controls.",
+    "best_practice": "Remove KB endpoint pages (kb_view, kb_find, kb_home, kb_list) from sys_public.list unless unauthenticated access is an explicit, reviewed requirement."
+  },
+  "level-knowledge/cstaces-11o-public-kb-widget": {
+    "tactics": ["Initial Access", "Collection", "Reconnaissance"],
+    "techniques": [
+      { "id": "T1190", "name": "Exploit Public-Facing Application" },
+      { "id": "T1213", "name": "Data from Information Repositories" },
+      { "id": "T1595", "name": "Active Scanning" }
+    ],
+    "rationale": "Public KB widgets expose a server-side API that attackers can call unauthenticated, including enumerating/brute-forcing sequential KB numbers to harvest articles at scale.",
+    "best_practice": "Set public=false on KB-related Service Portal widgets; if public access is required, enforce user-criteria checks in the widget's server script, not just the portal page."
+  },
+  "level-knowledge/cstaces-11p-acl-km-no-auth": {
+    "tactics": ["Initial Access", "Collection"],
+    "techniques": [
+      { "id": "T1190", "name": "Exploit Public-Facing Application" },
+      { "id": "T1213", "name": "Data from Information Repositories" }
+    ],
+    "rationale": "An unauthenticated Knowledge Management REST API gives attackers a direct, scriptable path to bulk-read KB content without ever touching the UI.",
+    "best_practice": "Require authentication (and appropriate roles) on all sn_km_api endpoints; never leave the REST API ACL open to unauthenticated requests."
+  },
+  "level-knowledge/cstaces-11q-acl-kb-empty": {
+    "tactics": ["Collection", "Privilege Escalation"],
+    "techniques": [
+      { "id": "T1213", "name": "Data from Information Repositories" },
+      { "id": "T1548", "name": "Abuse Elevation Control Mechanism" }
+    ],
+    "rationale": "An empty ACL (no role, condition, or script) on the kb_knowledge table removes the table-level backstop, leaving protection entirely dependent on user criteria.",
+    "best_practice": "Define a baseline role/condition on kb_knowledge ACLs so table-level access control doesn't rely solely on user criteria."
+  },
+  "level-knowledge/cstaces-11r-acl-kb-custom": {
+    "tactics": ["Collection", "Defense Evasion"],
+    "techniques": [
+      { "id": "T1213", "name": "Data from Information Repositories" },
+      { "id": "T1548", "name": "Abuse Elevation Control Mechanism" }
+    ],
+    "rationale": "A custom ACL that's broader than intended can silently override or bypass the user-criteria model KB governance otherwise relies on.",
+    "best_practice": "Review every custom ACL on kb_knowledge/kb_knowledge_base against the intended user-criteria model; remove or tighten any that grant broader access than criteria allow."
+  },
+  "level-knowledge/cstaces-11s-kba-no-criteria-open-kb-oob-is": {
+    "tactics": ["Collection"],
+    "techniques": [{ "id": "T1213", "name": "Data from Information Repositories" }],
+    "rationale": "Even within a generally restricted KB, individual published articles lacking their own criteria can be the weakest link an attacker finds first.",
+    "best_practice": "Audit published articles for missing criteria, especially in knowledge bases that are otherwise open or broadly accessible."
+  },
+  "level-knowledge/cstaces-11t-kba-public-role": {
+    "tactics": ["Initial Access", "Collection"],
+    "techniques": [
+      { "id": "T1190", "name": "Exploit Public-Facing Application" },
+      { "id": "T1213", "name": "Data from Information Repositories" }
+    ],
+    "rationale": "The public role on an article is a strong signal of intentional (or accidental) unauthenticated exposure and should be explicitly justified.",
+    "best_practice": "Treat every article carrying the public role as a reviewed exception, not a default; remove it unless unauthenticated access is deliberate."
+  },
+  "level-knowledge/cstaces-11u-uc-scripted-on-kb": {
+    "tactics": ["Collection", "Defense Evasion"],
+    "techniques": [
+      { "id": "T1213", "name": "Data from Information Repositories" },
+      { "id": "T1548", "name": "Abuse Elevation Control Mechanism" }
+    ],
+    "rationale": "Scripted user criteria can contain logic bugs or unintended always-true conditions that silently grant broader access than a declarative criteria would.",
+    "best_practice": "Code-review scripted user criteria for logic errors; prefer declarative (non-scripted) criteria unless scripting is strictly necessary."
+  },
+  "level-knowledge/cstaces-11v-kb-commenting-enabled-oob-sc": {
+    "tactics": ["Collection", "Initial Access"],
+    "techniques": [
+      { "id": "T1213", "name": "Data from Information Repositories" },
+      { "id": "T1566", "name": "Phishing" }
+    ],
+    "rationale": "Open commenting on KB articles can be abused to post phishing links or sensitive data, especially on externally-visible or sensitive-content knowledge bases.",
+    "best_practice": "Disable commenting on sensitive or externally-facing KBs, or add moderation before comments become visible."
+  },
+  "level-next/cstaces-10-sched-job-admin": {
+    "tactics": ["Persistence", "Privilege Escalation"],
+    "techniques": [{ "id": "T1053", "name": "Scheduled Task/Job" }],
+    "rationale": "A scheduled job running with admin privileges is a standing, unattended execution path — if its script or trigger conditions are tampered with, it runs attacker-controlled code with full admin rights on a timer.",
+    "best_practice": "Run scheduled jobs under the least-privileged role that completes the task; reserve admin-context jobs for platform-maintenance jobs only, with change control on their scripts."
+  },
+  "level-next/cstaces-5b-active-oauth": {
+    "tactics": ["Persistence", "Defense Evasion", "Lateral Movement"],
+    "techniques": [{ "id": "T1550.001", "name": "Use Alternate Authentication Material: Application Access Token" }],
+    "rationale": "Active OAuth tokens/clients are durable, often long-lived credentials that let an attacker (or former integration) authenticate without a password or MFA prompt.",
+    "best_practice": "Inventory and review all OAuth client/token grants quarterly; revoke unused tokens and set short, enforced expirations."
+  },
+  "level-next/cstaces-6-br-priv-esc": {
+    "tactics": ["Privilege Escalation", "Persistence"],
+    "techniques": [
+      { "id": "T1548", "name": "Abuse Elevation Control Mechanism" },
+      { "id": "T1505", "name": "Server Software Component" }
+    ],
+    "rationale": "Business Rules that run with elevated context (e.g., bypassing workflow/ACL enforcement while writing to security-relevant tables) can act as a built-in privilege-escalation or persistence mechanism baked into application logic.",
+    "best_practice": "Code-review Business Rules for patterns that grant roles, modify ACLs, or write to security tables; restrict who can create/edit Business Rules via scoped admin access and source control."
+  },
+  "level-next/cstaces-7-ui-bypass": {
+    "tactics": ["Defense Evasion"],
+    "techniques": [{ "id": "T1565.001", "name": "Data Manipulation: Stored Data Manipulation" }],
+    "rationale": "UI Policies that waive mandatory fields can let users (or an attacker driving the UI/API) submit incomplete or inconsistent records that evade downstream validation or approval logic.",
+    "best_practice": "Audit UI Policies that make mandatory fields optional; ensure server-side validation (not just UI policy) enforces required data for security-relevant tables."
+  },
+  "level-next/cstaces-9a-auth-session-prop": {
+    "tactics": ["Lateral Movement", "Persistence"],
+    "techniques": [
+      { "id": "T1563", "name": "Remote Service Session Hijacking" },
+      { "id": "T1078", "name": "Valid Accounts" }
+    ],
+    "rationale": "Weak session properties (long idle timeout, no concurrent-session limits) extend the usable window for a hijacked or shared session, giving an attacker more time to act under a valid session.",
+    "best_practice": "Tighten session idle timeout and concurrent-session limits to the shortest values operationally acceptable; align with your SSO provider's session policy."
+  },
+  "level-next/cstaces-9b-admin-no-mfa": {
+    "tactics": ["Initial Access", "Privilege Escalation"],
+    "techniques": [
+      { "id": "T1078", "name": "Valid Accounts" },
+      { "id": "T1556.006", "name": "Modify Authentication Process: Multi-Factor Authentication" }
+    ],
+    "rationale": "Privileged accounts without MFA are single-factor-protected high-value targets — a leaked or guessed password alone is enough for full instance compromise.",
+    "best_practice": "Require MFA for all admin/security_admin accounts without exception, including break-glass accounts; enforce via MFA Policy or the identity provider."
+  }
+}
