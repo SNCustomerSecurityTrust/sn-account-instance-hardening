@@ -88,9 +88,9 @@ server process via (checked in this order):
 2. `SN_CLIENT_SECRET` — the secret directly as an environment variable.
 3. The `clientSecret` tool argument, as a last resort.
 
-## Connecting from a client
+## Using this server from an MCP client (Claude Desktop/Code)
 
-Example `mcpServers` entry (e.g. for Claude Desktop/Code config):
+Example `mcpServers` entry:
 
 ```json
 {
@@ -102,3 +102,47 @@ Example `mcpServers` entry (e.g. for Claude Desktop/Code config):
   }
 }
 ```
+
+Or run it from the container image (see below) instead of a local `node` install:
+
+```json
+{
+  "mcpServers": {
+    "sn-account-instance-hardening": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "sn-hardening-mcp"]
+    }
+  }
+}
+```
+
+## Container image
+
+The image is built from the **repo root** (not from `mcp-server/`), since it
+needs both `mcp-server/` and the sibling `scans/` directory as build context:
+
+```bash
+docker build -t sn-hardening-mcp .
+```
+
+Run it as an MCP client would (stdio, so `-i` is required; no port to publish):
+
+```bash
+docker run --rm -i sn-hardening-mcp
+```
+
+To connect to a client's ServiceNow instance from the container, mount a
+secret file and point `SN_CLIENT_SECRET_FILE` at it (the ESO/Vault-volume
+pattern — see above), or pass `SN_CLIENT_SECRET` as an env var:
+
+```bash
+docker run --rm -i \
+  -v /path/to/secret:/run/secrets/sn-client-secret:ro \
+  -e SN_CLIENT_SECRET_FILE=/run/secrets/sn-client-secret \
+  sn-hardening-mcp
+```
+
+The image runs as a non-root user, builds in a separate stage from devDependencies
+(so the shipped image has no TypeScript/build tooling), and bakes in the
+`scans/` catalog and `data/attack-mappings.json` at build time — rebuild the
+image to pick up changes to either.
